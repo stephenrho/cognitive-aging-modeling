@@ -1,0 +1,14 @@
+#2HTM for ratings
+Old Old_6 po*r6+(1-po)*b*q6
+Old Old_5 po*(1-r6)*r5+(1-po)*b*(1-q6)*q5
+Old Old_4 po*(1-r6)*(1-r5)+(1-po)*b*(1-q6)*(1-q5)
+Old Old_3 (1-po)*(1-b)*(1-q1)*(1-q2)
+Old Old_2 (1-po)*(1-b)*(1-q1)*q2
+Old Old_1 (1-po)*(1-b)*q1
+New New_6 (1-pn)*b*q6
+New New_5 (1-pn)*b*(1-q6)*q5
+New New_4 (1-pn)*b*(1-q6)*(1-q5)
+New New_3 pn*(1-r1)*(1-r2)+(1-pn)*(1-b)*(1-q1)*(1-q2)
+New New_2 pn*(1-r1)*r2+(1-pn)*(1-b)*(1-q1)*q2
+New New_1 pn*r1+(1-pn)*(1-b)*q1
+	
