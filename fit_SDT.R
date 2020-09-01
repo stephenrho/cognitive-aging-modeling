@@ -28,7 +28,7 @@ with(subset(rdat, group=="Y"), barplot(table(signal, rating), beside = T, main =
 with(subset(rdat, group=="O"), barplot(table(signal, rating), beside = T, main = "O"))
 par(mfrow=c(1,1))
 
-# code so older = 1
+# code so older = 1 in the design matrix, X
 contrasts(rdat$group) = c(1,0)
 
 # put the data into list form for rstan
@@ -68,6 +68,7 @@ SDT_m1_fit <- stan(
 # save the model object for later
 saveRDS(SDT_m1_fit, file = "models/SDT_m1_fit.rds")
 # the code below can be used to read in the model instead of re-fitting
+# download fitted models from: https://drive.google.com/drive/folders/14gmtoYXKHMtZL7yjIzdmjKEhjIrmsGaq
 #SDT_m1_fit = readRDS("models/SDT_m1_fit.rds")
 
 # these values should be close to 1
@@ -90,10 +91,12 @@ traceplot(SDT_m1_fit, pars=c("B_d", "B_a", "B_b", "B_s",
 hist(extract(SDT_m1_fit, pars="B_s[1]")[[1]])
 hist(exp(extract(SDT_m1_fit, pars="B_s[1]")[[1]]))
 
+# extract age parameter for d
 age_d = extract(SDT_m1_fit, pars="B_d[2]")[[1]]
 
 hist(age_d, breaks = 30, main=bquote(Beta[1]^"(d)"), xlab="")
 
+# convert back to d scale to compare groups
 d_young = exp(extract(SDT_m1_fit, pars="B_d[1]")[[1]])
 d_old = exp(apply(extract(SDT_m1_fit, pars="B_d")[[1]], 1, sum))
 hist(d_young, xlim=c(.5,3), ylim=c(0, 2000), col="lightblue", main="Younger=blue; Older=pink")
@@ -102,13 +105,21 @@ hist(d_old, col="pink", add=T)
 hist(d_old-d_young, main="Age difference in units of d")
 
 # posterior predictive checks
-yrep <- extract(SDT_m1_fit, pars = "y_rep")[[1]]
+yrep <- extract(SDT_m1_fit, pars = "y_rep")[[1]] # posterior simulations from the generated quantities block
 y <- rdat$rating
 
 # plot only 100 simulations from the posterior as takes a long time to do all
 ppc_bars_grouped(y, yrep[sample(1:nrow(yrep), size = 100),], group = rdat$group)
 ppc_bars_grouped(y, yrep[sample(1:nrow(yrep), size = 100),], 
                  group = paste0("group = ", rdat$group, 
+                                "; trial = ", rdat$signal))
+
+# by condition, A/B
+# remember condition isn't in this model (see model 3)
+# so predictions don't differ between conditions, which leads to mis-fit
+ppc_bars_grouped(y, yrep[sample(1:nrow(yrep), size = 100),], 
+                 group = paste0("condition = ", rdat$cond,
+                                "; group = ", rdat$group, 
                                 "; trial = ", rdat$signal))
 
 ### model 2: ----
@@ -130,10 +141,16 @@ saveRDS(SDT_m2_fit, file = "models/SDT_m2_fit.rds")
 plot(SDT_m2_fit, pars=c("B_d", "B_a", "B_b", "B_s",
                     "tau_d", "tau_a", "tau_b", "tau_s"))
 
+# posterior predictions from model 2
 yrep2 <- extract(SDT_m2_fit, pars = "y_rep")[[1]]
 
 ppc_bars_grouped(y, yrep2[sample(1:nrow(yrep2), size = 100),], 
                  group = paste0("group = ", rdat$group, 
+                                "; trial = ", rdat$signal))
+
+ppc_bars_grouped(y, yrep2[sample(1:nrow(yrep), size = 100),], 
+                 group = paste0("condition = ", rdat$cond,
+                                "; group = ", rdat$group, 
                                 "; trial = ", rdat$signal))
 
 # compare models 1 and 2
@@ -142,42 +159,12 @@ SDT_m1_ll = bridge_sampler(SDT_m1_fit)
 SDT_m2_ll = bridge_sampler(SDT_m2_fit)
 
 saveRDS(SDT_m1_ll, file = "models/SDT_m1_ll.rds")
+#SDT_m1_ll = readRDS("models/SDT_m1_ll.rds")
 saveRDS(SDT_m2_ll, file = "models/SDT_m2_ll.rds")
+#SDT_m2_ll = readRDS("models/SDT_m2_ll.rds")
 
 bayes_factor(SDT_m1_ll, SDT_m2_ll)
 
-
-### model 3: ----
-# model the effect of condition (+ individual level effect)
-# and interaction between age group and condition for d
-
-# modify the group level design matrix (X) and add one for individual level (Z)
-data_list$X = model.matrix(~ group + cond + group:cond, data = rdat)
-data_list$Z = model.matrix(~ cond, data = rdat)
-
-SDT_m3_fit <- stan(
-  file = "models/SDT_m3.stan",
-  data = data_list,
-  chains = nchains,
-  warmup = nwarm,
-  iter = niter,
-  pars=c("d", "s", "a", "b", "c", "theta"),
-  include=F
-)
-
-# save
-saveRDS(SDT_m3_fit, file = "models/SDT_m3_fit.rds")
-#SDT_m3_fit = readRDS("models/SDT_m3_fit.rds")
-
-plot(SDT_m3_fit, pars=c("B_d", "B_a", "B_b", "B_s",
-                        "tau_d", "tau_a", "tau_b", "tau_s"))
-
-traceplot(SDT_m3_fit, pars=c("B_d", "B_a", "B_b", "B_s",
-                        "tau_d", "tau_a", "tau_b", "tau_s"))
-
-
-
-#SDT_m3_ll = bridge_sampler(SDT_m3_fit)
 
 ### ### ### ### ### ### ### ### ### ### 
 ### other modifications of model 1  ###
@@ -208,15 +195,24 @@ saveRDS(SDT_m1.2_fit, file = "models/SDT_m1.2_fit.rds")
 
 item_d = as.array(SDT_m1.2_fit, pars="alpha_d")
 
+# plot the item effects (ordered by median)
+mcmc_intervals(item_d[,,order(apply(item_d, 3, median), decreasing = T)]) # medians and error bars
+mcmc_areas(item_d[,,order(apply(item_d, 3, median), decreasing = T)]) # density plots
 
-mcmc_intervals(item_d[,,order(apply(item_d, 3, median), decreasing = T)])
-mcmc_areas(item_d[,,order(apply(item_d, 3, median), decreasing = T)])
-
-
+# extract the coefficient for age difference in d (log scale)
 age_d1.2 = extract(SDT_m1.2_fit, pars="B_d[2]")[[1]]
 
-plot(density(age_d), main=bquote(Beta[1]^"(d)"), xlab="", lwd=2, xlim=c(-.2,1))
+# compare to oridinal model
+plot(density(age_d), main=bquote(Beta[1]^"(d)"), xlab="", lwd=2, xlim=c(-1,.2), ylim=c(0,4))
 lines(density(age_d1.2), lwd=2, col="red")
+
+h1 = HDInterval::hdi(age_d)
+h2 = HDInterval::hdi(age_d1.2)
+segments(x0 = h1["lower"], x1 = h1["upper"], y0 = .25, y1 = .25, lwd = 3)
+segments(x0 = h2["lower"], x1 = h2["upper"], y0 = .5, y1 = .5, lwd = 3, col="red")
+points(x = c(median(h1), median(h2)), y = c(.25, .5), pch=16, cex=2, col=c("black", "red"))
+
+legend("topright", legend = c("no item effect", "item effect"), text.col = c("black", "red"), bty='n')
 
 ### model 1.3 ----
 # allow the groups to differ in between-participant variability for d
@@ -245,13 +241,75 @@ plot(SDT_m1.3_fit, pars=c("B_d", "B_a", "B_b", "B_s",
 
 plot(SDT_m1.3_fit, pars=c("tau_d"))
 
+# extract estimates of between-participant variability (SD)
 tau_d = extract(SDT_m1.3_fit, pars=c("tau_d"))[[1]]
+# column 1 = younger, 2 = older
 
-par(mfrow=c(1,2))
+# plot the estimates and their difference
+# par(mfrow=c(1,2))
 plot(density(tau_d[,1]), lwd=2, main=bquote(tau^"(d)"), xlab="", xlim=c(0, .9))
 lines(density(tau_d[,2]), lwd=2, col="blue")
 legend("topright", legend=c("younger", "older"), text.col=c("black", "blue"), bty="n")
 
 plot(density(apply(tau_d, 1, diff)), lwd=2, 
      main=bquote(tau[old]^"(d)" - tau[young]^"(d)"), xlab="")
+
+### ### ### ### ### ### ### ### ### ### ### ### ### ### 
+
+### model 3: ----
+# model the effect of condition (+ individual level effect)
+# and interaction between age group and condition for d
+
+# modify the group level design matrix (X) and add one for individual level (Z)
+data_list$X = model.matrix(~ group + cond + group:cond, data = rdat)
+data_list$Z = model.matrix(~ cond, data = rdat)
+
+SDT_m3_fit <- stan(
+  file = "models/SDT_m3.stan",
+  data = data_list,
+  chains = nchains,
+  warmup = nwarm,
+  iter = niter,
+  pars=c("d", "s", "a", "b", "c", "theta"),
+  include=F
+)
+
+# save
+saveRDS(SDT_m3_fit, file = "models/SDT_m3_fit.rds")
+#SDT_m3_fit = readRDS("models/SDT_m3_fit.rds")
+
+plot(SDT_m3_fit, pars=c("B_d", "B_a", "B_b", "B_s",
+                        "tau_d", "tau_a", "tau_b", "tau_s"))
+
+traceplot(SDT_m3_fit, pars=c("B_d", "B_a", "B_b", "B_s",
+                        "tau_d", "tau_a", "tau_b", "tau_s"))
+
+# extract the group level effects for d
+B_d = extract(SDT_m3_fit, pars="B_d")[[1]]
+
+# convert back to d scale for both groups and conditions
+# condition A was coded 0 and B coded 1
+# group Y was coded 0 and group O coded 1
+# therefore, we can multiply the matrix of B_d samples
+# by particular vectors that code for group and condition
+
+d_youngA = exp( B_d %*% c(1,0,0,0) )
+d_youngB = exp( B_d %*% c(1,0,1,0) )
+d_oldA = exp( B_d %*% c(1,1,0,0) )
+d_oldB = exp( B_d %*% c(1,1,1,1) )
+
+# par(mfrow=c(1,2))
+plot(density(d_youngA), lwd=2, xlim=c(.5,3.5), ylim=c(0,5), main="d", xlab="")
+lines(density(d_youngB), lwd=2, lty=3)
+lines(density(d_oldA), lwd=2, col="blue")
+lines(density(d_oldB), lwd=2, col="blue", lty=3)
+legend("topright", legend = c("Younger", "Older", "A", "B"), 
+       lty = c(NA, NA, 1, 3), lwd=c(NA, NA, 2, 2),
+       text.col = c("black", "blue", "black", "black"), bty="n")
+
+plot(density(d_youngA - d_oldA), lwd=2, xlim=c(-1.5,2.5), ylim=c(0,3), main="d - group differences\nby condition", xlab="")
+lines(density(d_youngB - d_oldB), lwd=2, lty=3)
+lines(density((d_youngA - d_oldA) - (d_youngB - d_oldB)), lwd=2, col='red')
+legend("topleft", legend = c("A", "B", "Difference (A - B)"), 
+       lty = c(1, 3, 1), lwd=c(2, 2, 2), col=c("black", "black", "red"), bty="n")
 
