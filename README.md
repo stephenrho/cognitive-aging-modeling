@@ -1,7 +1,7 @@
 
 # A Tutorial on Cognitive Modeling for Cognitive Aging Research
 
-Here are materials accompanying the tutorial 'A Tutorial on Cognitive Modeling for Cognitive Aging Research' [link to paper]
+Here are materials accompanying the tutorial 'A Tutorial on Cognitive Modeling for Cognitive Aging Research' https://psyarxiv.com/qsnea/
 
 - `models/` - contains the `stan` implementations of the signal detection theory models discussed in the tutorial
 - `data/` - contains the data set used in the example analysis
