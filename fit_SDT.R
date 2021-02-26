@@ -4,10 +4,16 @@
 ## make sure the working directory is set to the folder containing
 ## the 'models' and 'data' folders
 
+LOAD = T 
+# if you have fitted model objects saved, set this to T to load them and not re-run models
+# if you don't have fitted models or want to re-run, set to F
+# you can download fitted models from: https://drive.google.com/drive/folders/14gmtoYXKHMtZL7yjIzdmjKEhjIrmsGaq
+
 # load the packages we use
 library(rstan)
 library(bridgesampling)
 library(bayesplot)
+library(HDInterval)
 
 # rstan settings
 rstan_options(auto_write = TRUE) # write the models so we don't have to recompile
@@ -29,6 +35,7 @@ with(subset(rdat, group=="O"), barplot(table(signal, rating), beside = T, main =
 par(mfrow=c(1,1))
 
 # code so older = 1 in the design matrix, X
+rdat$group = as.factor(rdat$group)
 contrasts(rdat$group) = c(1,0)
 
 # put the data into list form for rstan
@@ -53,23 +60,25 @@ niter = 2000
 
 ### model 1: ----
 # age differences allowed for all parameters
-SDT_m1_fit <- stan(
-  file = "models/SDT_m1.stan",
-  data = data_list,
-  chains = nchains,
-  warmup = nwarm,
-  iter = niter,
-  # the lines below exclude the stan parameters listed from 
-  # being saved. Otherwise the model object is v large
-  pars=c("d", "s", "a", "b", "c", "theta"),
-  include=F
-)
 
-# save the model object for later
-saveRDS(SDT_m1_fit, file = "models/SDT_m1_fit.rds")
-# the code below can be used to read in the model instead of re-fitting
-# download fitted models from: https://drive.google.com/drive/folders/14gmtoYXKHMtZL7yjIzdmjKEhjIrmsGaq
-#SDT_m1_fit = readRDS("models/SDT_m1_fit.rds")
+if (!LOAD | !file.exists("models/SDT_m1_fit.rds")){
+  SDT_m1_fit <- stan(
+    file = "models/SDT_m1.stan",
+    data = data_list,
+    chains = nchains,
+    warmup = nwarm,
+    iter = niter,
+    # the lines below exclude the stan parameters listed from 
+    # being saved. Otherwise the model object is v large
+    pars=c("d", "s", "a", "b", "c", "theta"),
+    include=F
+  )
+  # save the model object for later
+  saveRDS(SDT_m1_fit, file = "models/SDT_m1_fit.rds")
+} else {
+  # load
+  SDT_m1_fit = readRDS("models/SDT_m1_fit.rds")
+}
 
 # these values should be close to 1
 # if not the model has not converged
@@ -124,19 +133,23 @@ ppc_bars_grouped(y, yrep[sample(1:nrow(yrep), size = 100),],
 
 ### model 2: ----
 # fix d so there is no age difference
-SDT_m2_fit <- stan(
-  file = "models/SDT_m2.stan",
-  data = data_list,
-  chains = nchains,
-  warmup = nwarm,
-  iter = niter,
-  pars=c("d", "s", "a", "b", "c", "theta"),
-  include=F
-)
 
-# save
-saveRDS(SDT_m2_fit, file = "models/SDT_m2_fit.rds")
-#SDT_m2_fit = readRDS("models/SDT_m2_fit.rds")
+if (!LOAD | !file.exists("models/SDT_m2_fit.rds")){
+  SDT_m2_fit <- stan(
+    file = "models/SDT_m2.stan",
+    data = data_list,
+    chains = nchains,
+    warmup = nwarm,
+    iter = niter,
+    pars=c("d", "s", "a", "b", "c", "theta"),
+    include=F
+  )
+  
+  # save
+  saveRDS(SDT_m2_fit, file = "models/SDT_m2_fit.rds")
+} else{
+  SDT_m2_fit = readRDS("models/SDT_m2_fit.rds")
+}
 
 plot(SDT_m2_fit, pars=c("B_d", "B_a", "B_b", "B_s",
                     "tau_d", "tau_a", "tau_b", "tau_s"))
@@ -154,17 +167,19 @@ ppc_bars_grouped(y, yrep2[sample(1:nrow(yrep), size = 100),],
                                 "; trial = ", rdat$signal))
 
 # compare models 1 and 2
-# use the bridgesampling package to esitmate log likelihood
-SDT_m1_ll = bridge_sampler(SDT_m1_fit)
-SDT_m2_ll = bridge_sampler(SDT_m2_fit)
-
-saveRDS(SDT_m1_ll, file = "models/SDT_m1_ll.rds")
-#SDT_m1_ll = readRDS("models/SDT_m1_ll.rds")
-saveRDS(SDT_m2_ll, file = "models/SDT_m2_ll.rds")
-#SDT_m2_ll = readRDS("models/SDT_m2_ll.rds")
+# use the bridgesampling package to estimate log likelihood
+if (!LOAD | !file.exists("models/SDT_m1_ll.rds")){
+  SDT_m1_ll = bridge_sampler(SDT_m1_fit)
+  SDT_m2_ll = bridge_sampler(SDT_m2_fit)
+  
+  saveRDS(SDT_m1_ll, file = "models/SDT_m1_ll.rds")
+  saveRDS(SDT_m2_ll, file = "models/SDT_m2_ll.rds")
+} else{
+  SDT_m1_ll = readRDS("models/SDT_m1_ll.rds")
+  SDT_m2_ll = readRDS("models/SDT_m2_ll.rds")
+}
 
 bayes_factor(SDT_m1_ll, SDT_m2_ll)
-
 
 ### ### ### ### ### ### ### ### ### ### 
 ### other modifications of model 1  ###
@@ -179,19 +194,22 @@ data_list$X = model.matrix(~ 1 + group, data = rdat)
 data_list$item = rdat$item
 data_list$M = length(unique(rdat$item))
 
-SDT_m1.2_fit <- stan(
-  file = "models/SDT_m1.2.stan",
-  data = data_list,
-  chains = nchains,
-  warmup = nwarm,
-  iter = niter,
-  pars=c("d", "s", "a", "b", "c", "theta"),
-  include=F
-)
-
-# save 
-saveRDS(SDT_m1.2_fit, file = "models/SDT_m1.2_fit.rds")
-#SDT_m1.2_fit = readRDS("models/SDT_m1.2_fit.rds")
+if (!LOAD | !file.exists("models/SDT_m1.2_fit.rds")){
+  SDT_m1.2_fit <- stan(
+    file = "models/SDT_m1.2.stan",
+    data = data_list,
+    chains = nchains,
+    warmup = nwarm,
+    iter = niter,
+    pars=c("d", "s", "a", "b", "c", "theta"),
+    include=F
+  )
+  
+  # save 
+  saveRDS(SDT_m1.2_fit, file = "models/SDT_m1.2_fit.rds")
+} else {
+  SDT_m1.2_fit = readRDS("models/SDT_m1.2_fit.rds")
+}
 
 item_d = as.array(SDT_m1.2_fit, pars="alpha_d")
 
@@ -202,12 +220,12 @@ mcmc_areas(item_d[,,order(apply(item_d, 3, median), decreasing = T)]) # density 
 # extract the coefficient for age difference in d (log scale)
 age_d1.2 = extract(SDT_m1.2_fit, pars="B_d[2]")[[1]]
 
-# compare to oridinal model
+# compare to original model
 plot(density(age_d), main=bquote(Beta[1]^"(d)"), xlab="", lwd=2, xlim=c(-1,.2), ylim=c(0,4))
 lines(density(age_d1.2), lwd=2, col="red")
 
-h1 = HDInterval::hdi(age_d)
-h2 = HDInterval::hdi(age_d1.2)
+h1 = hdi(age_d)
+h2 = hdi(age_d1.2)
 segments(x0 = h1["lower"], x1 = h1["upper"], y0 = .25, y1 = .25, lwd = 3)
 segments(x0 = h2["lower"], x1 = h2["upper"], y0 = .5, y1 = .5, lwd = 3, col="red")
 points(x = c(median(h1), median(h2)), y = c(.25, .5), pch=16, cex=2, col=c("black", "red"))
@@ -222,19 +240,22 @@ grps = rdat$group[!duplicated(rdat$id)]
 # convert to 0s (Y) and 1s (O)
 data_list$group = as.integer(grps == "O")
 
-SDT_m1.3_fit <- stan(
-  file = "models/SDT_m1.3.stan",
-  data = data_list,
-  chains = nchains,
-  warmup = nwarm,
-  iter = niter,
-  pars=c("d", "s", "a", "b", "c", "theta"),
-  include=F
-)
-
-# save
-saveRDS(SDT_m1.3_fit, file = "models/SDT_m1.3_fit.rds")
-#SDT_m1.3_fit = readRDS("models/SDT_m1.3_fit.rds")
+if (!LOAD | !file.exists("models/SDT_m1.3_fit.rds")){
+  SDT_m1.3_fit <- stan(
+    file = "models/SDT_m1.3.stan",
+    data = data_list,
+    chains = nchains,
+    warmup = nwarm,
+    iter = niter,
+    pars=c("d", "s", "a", "b", "c", "theta"),
+    include=F
+  )
+  
+  # save
+  saveRDS(SDT_m1.3_fit, file = "models/SDT_m1.3_fit.rds")
+} else{
+  SDT_m1.3_fit = readRDS("models/SDT_m1.3_fit.rds")
+}
 
 plot(SDT_m1.3_fit, pars=c("B_d", "B_a", "B_b", "B_s",
                           "tau_d", "tau_a", "tau_b", "tau_s"))
@@ -253,6 +274,44 @@ legend("topright", legend=c("younger", "older"), text.col=c("black", "blue"), bt
 
 plot(density(apply(tau_d, 1, diff)), lwd=2, 
      main=bquote(tau[old]^"(d)" - tau[young]^"(d)"), xlab="")
+
+### model 1.4 ----
+# correlate another measure with individual differences (i.e. random effects) in d
+
+# for this we have to read in the other measure
+scores = read.csv("data/cor-scores.csv") # one score for each person
+
+data_list$score = scores$score
+
+if (!LOAD | !file.exists("models/SDT_m1.4_fit.rds")){
+  SDT_m1.4_fit <- stan(
+    file = "models/SDT_m1.4.stan",
+    data = data_list,
+    chains = nchains,
+    warmup = nwarm,
+    iter = niter,
+    pars=c("d", "s", "a", "b", "c", "theta"),
+    include=F
+  )
+  
+  # save
+  saveRDS(SDT_m1.4_fit, file = "models/SDT_m1.4_fit.rds")
+} else{
+  SDT_m1.4_fit = readRDS("models/SDT_m1.4_fit.rds")
+}
+
+plot(SDT_m1.4_fit, pars="Sigma")
+
+# extract the correlation samples
+rho = extract(SDT_m1.4_fit, pars="Sigma[1,2]")[[1]]
+
+# posterior mean and median
+mean(rho); median(rho)
+# and 95% credible intervals
+quantile(rho, probs = c(0.025, .975))
+
+cor.test(x = apply(extract(SDT_m1_fit, pars="b_d")[[1]], 2, mean), 
+         y = scores$score)
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 

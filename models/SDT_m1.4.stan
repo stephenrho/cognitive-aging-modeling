@@ -1,6 +1,8 @@
 // parsimonious signal detection theory model for a rating experiment (based on Selker et al. 2020)
 // all parameters (d, s, a, b) are allowed to vary by age group (coded in X)
 
+// modification of model 1 to correlate another measure with d random effect
+
 data {
   int<lower=0> N;               // n observations
   int y[N];                     // ratings
@@ -9,6 +11,7 @@ data {
   matrix[N, 2] X;               // fixed design matrix
   vector[N] sig_trial;          // indicator for signal (1) or noise (0) trial
   int<lower=2> K;               // n categories
+  real score[J];                // the additional measure that we want to correlate with d random effect
 }
 
 transformed data {
@@ -23,6 +26,13 @@ parameters {
   vector[2] B_d;
   real b_d[J];
   real<lower=0> tau_d;
+  
+  // correlation between individual differences in d
+  // and score from another measure
+  real mu_score; // average score
+  real<lower=0> tau_score; // score SD
+  
+  corr_matrix[2] Sigma; // correlation of d random effect and score
   
   // c (shift [b] and scale [a])
   vector[2] B_a;
@@ -58,23 +68,6 @@ transformed parameters {
     c[i] = a[i]*unb_c + b[i];
     
     // rating probabilities under SDT
-    // the if-else statement below is included in the paper as it is more readable
-    // we find that the uncommented code below runs slightly faster so use it instead
-    // but the commented and uncommented lines acheive the same thing
-    //if (sig_trial[i] == 1){ // signal trial
-      //theta[i,1] = normal_cdf(c[i,1], d[i], s[i]);
-      //for (k in 2:(K-1)){
-        //theta[i,k] = normal_cdf(c[i,k], d[i], s[i]) - sum(theta[i,1:(k-1)]);
-      //}
-    //}
-    //else { // noise trial
-      //theta[i,1] = normal_cdf(c[i,1], 0, 1);
-      //for (k in 2:(K-1)){
-        //theta[i,k] = normal_cdf(c[i,k], 0, 1) - sum(theta[i,1:(k-1)]);
-      //}
-    //}
-    //theta[i,K] = 1 - sum(theta[i,1:(K-1)]); // last rating probability 
-  
     theta[i,1] = normal_cdf(c[i,1], d[i]*sig_trial[i], (1 + (-1 + s[i])*sig_trial[i]));
     for (k in 2:(K-1)){
       theta[i,k] = normal_cdf(c[i,k], d[i]*sig_trial[i], (1 + (-1 + s[i])*sig_trial[i])) - sum(theta[i,1:(k-1)]);
@@ -99,8 +92,18 @@ model {
   tau_b ~ cauchy(0, 2);
   tau_s ~ cauchy(0, 0.5);
   
+  // priors for mean and SD of score
+  mu_score ~ normal(0, 1);
+  tau_score ~ cauchy(0, 1);
+  
+  // prior for correlation between score and individual b_ds
+  Sigma ~ lkj_corr(1.0);
+  
   // individual level deviations
-  b_d ~ normal(0, tau_d);
+  for (j in 1:J){
+    [b_d[j],score[j]] ~ multi_normal([0,mu_score], quad_form_diag(Sigma, [tau_d,tau_score]));
+  }
+
   b_a ~ normal(0, tau_a);
   b_b ~ normal(0, tau_b);
   b_s ~ normal(0, tau_s);
