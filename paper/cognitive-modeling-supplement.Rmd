@@ -1,0 +1,819 @@
+---
+title             : "Supplement to 'A Tutorial on Cognitive Modeling for Cognitive Aging Research'"
+shorttitle        : "Cognitive Modeling Supplement"
+
+author: 
+  - name          : "Nathaniel R. Greene"
+    affiliation   : "1"
+    corresponding : yes
+    address       : "9J McAlester Hall, Department of Psychological Sciences, University of Missouri, Columbia, MO 65211"
+    email         : "ngreene@mail.missouri.edu"
+  - name          : "Stephen Rhodes"
+    affiliation   : "2"
+
+affiliation:
+  - id            : "1"
+    institution   : "University of Missouri"
+  - id            : "2"
+    institution   : "Rotman Research Institute"
+
+authornote: |
+  Materials available at https://github.com/stephenrho/cognitive-aging-modeling
+  
+keywords          : "keywords"
+wordcount         : "X"
+
+bibliography      : ["refs.bib"]
+
+toc               : true
+floatsintext      : yes
+figurelist        : no
+tablelist         : no
+footnotelist      : no
+linenumbers       : no
+mask              : no
+draft             : no
+urlcolor          : blue
+documentclass     : "apa6"
+classoption       : "doc"
+output            : papaja::apa6_pdf
+---
+
+```{r setup, include = FALSE}
+library("papaja")
+#r_refs("r-references.bib")
+library("TreeBUGS")
+library(rstan)
+library(bridgesampling)
+```
+
+```{r analysis-preferences}
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
+knitr::opts_knit$set(root.dir = normalizePath("../"))
+```
+
+# Getting and running the example code
+
+The example code is available on github at https://github.com/stephenrho/cognitive-aging-modeling. You can download the entire repository as a zip folder by clicking the green 'code' button and then 'Download ZIP'. Alternatively you can 'fork' the project.[^fork]
+
+[^fork]: https://docs.github.com/en/github/getting-started-with-github/fork-a-repo
+
+- `models/` - contains the `stan` implementations of the signal detection theory models discussed in the tutorial
+- `data/` - contains the data set used in the example analysis
+- `simulate-data.R` - contains the code used to simulate the data set
+- `fit_SDT.R` - uses the `rstan` package to fit the models
+- `MPT` - contains the files needed to fit the multinomial processing tree model
+
+`fit_SDT.R` is the main script of interest, although we also suggest opening each relevant `.stan` file when working through the examples.
+
+To run the code you will need to download `R` (https://www.r-project.org/) and we strongly recommend `R studio` (https://rstudio.com/). `R` has packages that extend its base functionality. For the examples covered here you will need to run the following code to install the required packages (this will require an internet connection and may take some time to run):
+
+```{r, eval=F, echo=T}
+install.packages(pkgs = c("rstan", 
+                          "bridgesampling", 
+                          "loo", 
+                          "bayesplot", 
+                          "HDInterval")
+                 )
+```
+
+We also recommend visiting https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started for more information on installing `rstan`.
+
+Once the relevant packages are installed you will need to set the 'working directory' to let `R` know where to find the models and data prior to running `fit_SDT.R`. This will depend on where you downloaded the github repository to. In `R studio` you can click "Session" --> "Set Working Directory" --> "Choose Directory..." to select the folder/directory containing the code. Alternatively, (also assuming you are using `R studio`) you can add the following code at the beginning of `fit_SDT.R`:
+
+```{r, eval=F, echo=T}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+```
+
+Note that before running each model `fit_SDT.R` checks if a model has been previously run and saved. Users are also able to set `LOAD` at the beginning of the script to `FALSE` (or `F`) if they would like to override this and always re-run models. The example code below shows how this works:
+
+```{r, eval=F, echo=T}
+if (!LOAD | !file.exists("models/SDT_m1_fit.rds")){
+  SDT_m1_fit <- stan(
+    file = "models/SDT_m1.stan",
+    data = data_list,
+    chains = nchains,
+    warmup = nwarm,
+    iter = niter,
+    # the lines below exclude the stan parameters listed from 
+    # being saved. Otherwise the model object is v large
+    pars=c("d", "s", "a", "b", "c", "theta"),
+    include=F
+  )
+  # save the model object for later
+  saveRDS(SDT_m1_fit, file = "models/SDT_m1_fit.rds")
+} else {
+  # load
+  SDT_m1_fit = readRDS("models/SDT_m1_fit.rds")
+}
+
+```
+
+If `LOAD` is set to `FALSE` (and therefore `!LOAD` is `TRUE`) *or* a previously saved file cannot be found, `stan` is used to fit the model and the results are saved in an `.rds` file (`|` is the "OR" operator in `R`; see, https://www.tutorialspoint.com/r/r_operators.htm). Otherwise (else), the previously saved results are loaded into `R`. As the models take some time to run, we have made fitted models available for download at https://drive.google.com/drive/folders/14gmtoYXKHMtZL7yjIzdmjKEhjIrmsGaq. The `.rds` files at that link should be placed in the `models/` folder.
+
+# Priors for the signal detection model
+
+In the `model` block of `SDT_m1.stan` we start by specifying the priors on the hierarchical parameters:
+```  
+  // priors
+  B_d[1] ~ normal(0, 1);
+  B_d[2] ~ normal(0, 0.5);
+  B_a[1] ~ normal(0, 1);
+  B_a[2] ~ normal(0, 0.5);
+  B_b[1] ~ normal(0, 2);
+  B_b[2] ~ normal(0, 1);
+  B_s[1] ~ normal(0, 0.5);
+  B_s[2] ~ normal(0, 0.25);
+  
+  tau_d ~ cauchy(0, 1);
+  tau_a ~ cauchy(0, 1);
+  tau_b ~ cauchy(0, 2);
+  tau_s ~ cauchy(0, 0.5);
+```
+
+The prior distribution reflects the degree of belief in particular parameter values before seeing new data. Here we have tried to specify *weakly informative* priors that cover reasonable parameters values but are not too constraining as to 'let the data speak' (for more detail on selecting priors, see https://github.com/stan-dev/stan/wiki/Prior-Choice-Recommendations). It is important to remember that for most of the signal detection parameters ($d$, $s$, and $a$) we are working on a transformed scale (specifically log scale) in order to map these constrained parameters onto all real numbers (to allow linear modeling). So the line `B_d[1] ~ normal(0, 1);` places most of the prior probability on an intercept $d = 1$ (as exp(0) = 1) and most of the prior mass between $d$ = exp(-1) = 0.37 and $d$ = exp(1) = 2.7. These are reasonable values for $d$ and $a$ (the scale factor for the response criteria), therefore we use the same Normal(0, 1) prior for both. For the intercept for $s$ there is a smaller range of reasonable values. Empirically this parameter tends to fall in the range of 0.7--1.3 [@Swets1986b]. The prior of `B_s[1] ~ normal(0, 0.5);` is a little broader than this but places most of the prior mass between $s$ = exp(-.5) = 0.61 and $s$ = exp(.5) = 1.65. Finally, the $b$ parameter is the only one that is not transformed as technically it can take any number. However, reasonable values for this fall in the -2 to +2 range, hence the `B_b[1] ~ normal(0, 2);`. 
+
+For the hierarchical parameters that control the age difference we have chosen normal prior distributions with half the variability of the corresponding intercept parameter. This reflects a prior belief that age differences are likely smaller than the reasonable range of parameter values. The selection of these priors is particularly important when one wants to calculate a Bayes factor in favor or against a particular age effect or interaction. The prior should reflect a reasonable alternative and not be overly diffuse. For example, in most cognitive aging applications there may be a strong reason to expect an age difference in a particular direction (i.e., a directional hypothesis). This could be encoded in a prior that places all mass on positive or negative values (depending on how things are coded in the design matrix, `X`). 
+
+Finally, for the `tau` parameters, which control between participant variability in the SDT parameters, we use a half-Cauchy distribution (Stan takes into account that the `tau`s are constrained to be positive in the `parameters` block). The Cauchy distribution is often used for its heavy tails, which means than most of the prior mass falls within the scale parameter (the second number in `cauchy(0, 1)`) but much larger values are not ruled out.
+
+When dealing with putting priors on transformed variables it can be useful to simulate parameters on their natural scale using `R` to see if the values are truly reasonable and not overly restrictive:
+
+```{r, echo=T}
+# simulate some individual level parameters
+nrep = 1e+05 # some large number
+
+mu = rnorm(n = nrep, mean = 0, sd = 1) # population level mean
+tau = abs(rcauchy(n = nrep, location = 0, scale = 1)) # population level SD
+
+# sample individuals and transform to natural scale
+mu_i = exp( rnorm(n = nrep, mean = mu, sd = tau) )
+
+round(quantile(mu_i, probs = c(.05, .25, .5, .75, .95)), 2)
+
+```
+
+# Generated quantities
+
+An important part of assessing how the model predictions relate to the observed data is to calculate the log likelihood of each observation under the predicted model probabilities and to simulate data from the fitted model ($y_{rep}$), which are known as posterior predictions. This is done in the `generated quantities` block, which comes after the `model` block (see `SDT_m1.stan`). The Stan function `categorical_lpmf` gives the log probability mass of the observation given the predicted probabilities according to SDT, whereas the `categorical_rng` generates a random number from 1 to $K$ with the probabilities given by `theta` (which was created in the `transformed parameters` block in the main manuscript).
+
+```
+generated quantities {
+  vector[N] log_lik;      // log likelihood matrix
+  vector[N] y_rep;        // posterior predictions
+  for (i in 1:N){
+    log_lik[i] = categorical_lpmf(y[i] | theta[i]);
+    y_rep[i] = categorical_rng(theta[i]);
+  }
+}
+```
+
+The `log_lik` matrix is particularly important when comparing different models fit to the data and is used to calculate metrics like WAIC and leave one out cross validation (LOO-CV), which are beyond the scope of the current tutorial [see @VehtariEtAl2017]. 
+
+As mentioned in the main manuscript, one graphical approach to assessing the adequacy of the model fit is to plot posterior predictions alongside the observed data. These predictions are generated in the `generated quantities` block of the Stan code. Using each sample of the different model parameters is used to generate a simulated response for each observation. This results in a predicted distribution for *each observation* in the data frame that propagates the uncertainty in the model parameters. The `R` code below extracts the posterior predictions (`yrep`) and the observed data (`y`) and uses the `bayesplot` package [@bayesplot] to plot the two (see Figure \ref{fig:ppc}). Specifically, the `ppc_bars_grouped` function allows us to produce separate plots for different groupings in the data (e.g., certain conditions, individual participants) and, in this case, we have chosen to plot the two age groups and different trial types (signal/noise). 
+
+```{r, messages=F, warning=F, results="hide"}
+rdat = read.csv("data/example-data.csv")
+
+SDT_m1_fit = readRDS("models/SDT_m1_fit.rds")
+
+yrep <- extract(SDT_m1_fit, pars = "y_rep")[[1]]
+y <- rdat$rating
+
+yrep = yrep[sample(1:nrow(yrep), size = 500),]
+
+age_d = extract(SDT_m1_fit, pars="B_d[2]")[[1]]
+```
+
+```{r, echo=T, eval=F}
+yrep <- extract(SDT_m1_fit, pars = "y_rep")[[1]] # posterior predictions
+# the [[1]] produces a vector instead of list
+y <- rdat$rating # data
+```
+
+```{r ppc, echo=T, cache=T, messages=F, warning=F, fig.cap="Posterior predictions (and 95% credible intervals) and the observed data plotted by group (Y = younger, O = older) and trial type (0 = noise, 1 = signal)."}
+library(bayesplot)
+gr = paste0("group = ", rdat$group, 
+            "; trial = ", rdat$signal) # combine group and trial type
+ppc_bars_grouped(y, yrep, group = gr, prob = .95, freq = F)
+```
+
+Disparities between the observed data and posterior predictions may suggest modifications to improve model fit (https://mc-stan.org/bayesplot/articles/graphical-ppcs.html). However, there is a trade-off between fitting one data set really well and the ability of a model to generalize to new data sets (see section on model comparison below).
+
+# Comparing models 1 and 2 via Bayes' factors
+
+In the main manuscript the primary example (`SDT_m1.stan`) is that of a model in which all parameters were allowed to differ by age group. To test the weight of evidence for an age difference in $d$ in particular we could restrict this initial model and remove the age effect. In the `parameters` block this involves changing the hierarchical parameters for $d$ as follows:
+```
+  // d
+  real B_d;
+  real b_d[J];
+  real<lower=0> tau_d;
+```
+
+Now `B_d` is a single real valued number reflecting average $\log(d)$ across both age groups instead of a vector of two values as in the initial model (recall that we model most of the parameters on a transformed scale to allow linear predictors). 
+
+In the `transformed parameters` block we also change the line determining `d[i]`: 
+```
+  d[i] = exp( B_d + b_d[id[i]] );
+```
+Otherwise the model save in `SDT_m2.stan` is the same as that in `SDT_m1.stan`. We can fit this model using `rjags` using the same call to the `stan` function and saving to an object `SDT_m2_fit`:
+
+```{r, echo=T, eval=F}
+SDT_m2_fit <- stan(
+  file = "models/SDT_m2.stan",
+  data = data_list,
+  chains = 4,
+  warmup = 1000,
+  iter = 2000,
+  cores = 4
+)
+```
+
+```{r, echo=F}
+SDT_m1_fit = readRDS("models/SDT_m1_fit.rds")
+SDT_m1.2_fit = readRDS("models/SDT_m1.2_fit.rds")
+SDT_m1.3_fit = readRDS("models/SDT_m1.3_fit.rds")
+SDT_m1.4_fit = readRDS("models/SDT_m1.4_fit.rds")
+SDT_m2_fit = readRDS("models/SDT_m2_fit.rds")
+SDT_m3_fit = readRDS("models/SDT_m3_fit.rds")
+
+age_d = extract(SDT_m1_fit, pars="B_d[2]")[[1]]
+age_d1.2 = extract(SDT_m1.2_fit, pars="B_d[2]")[[1]]
+
+SDT_m1_ll = readRDS("models/SDT_m1_ll.rds")
+SDT_m2_ll = readRDS("models/SDT_m2_ll.rds")
+```
+
+We can now compare `SDT_m1_fit` and `SDT_m2_fit` to see which better accounts for the observed data accounting for the fact that `SDT_m1_fit` is more flexible (as it includes the age difference in $d$, whereas `SDT_m2_fit` does not). One way to do this is to calculate a Bayes' factor using the `bridgesampling` package [@bridgesampling]. The `bridge_sampler` function estimates the marginal likelihood for a particular model, $p(\mbox{data} \mid \mbox{model})$ [see @gronau2017tutorial]. 
+
+```{r, echo=T, eval=F}
+library(bridgesampling)
+
+SDT_m1_ll = bridge_sampler(SDT_m1_fit)
+SDT_m2_ll = bridge_sampler(SDT_m2_fit)
+```
+
+The Bayes' factor is the ratio of marginal likelihoods for the two models: $BF_{12} = p(\mbox{data} \mid \mbox{model 1}) / p(\mbox{data} \mid \mbox{model 2})$. This is computed via the `bayes_factor` function:
+
+```{r, echo=T}
+bayes_factor(SDT_m1_ll, SDT_m2_ll)
+```
+
+Model 1, the model that allowed for age group differences in $d$, is favored over model 2, the model without the age difference, by a factor of around `r floor(bayes_factor(SDT_m1_ll, SDT_m2_ll)[[1]])`-to-1. Therefore, in this case there is strong evidence for an age difference (although the posterior probability of the model/hypothesis also depends on our prior belief in one model/hypothesis over another).
+
+Bayes' factors naturally account for model flexibility [ref] but when calculating them it is important to remember that the model is defined not only by the structure of the model but the priors placed on the parameters. Therefore, the priors should cover reasonable possible parameter values and should not be overly broad. For instance, in the example above where we are comparing a 'null' model (model 2 with no age difference) to an alternative model (model 1 with an age difference) choosing a more diffuse prior for the age difference ($\beta_1^{(d)}$) would result in greater support for the null hypothesis for fixed data [@lindley1957statistical].
+
+There are other approaches to comparing models that have different conceptual foundations. In particular the widely applicable (or Watanabe–Akaike) information criterion [WAIC; @watanabe2013widely] and leave-one out cross validation [LOO-CV; @VehtariEtAl2017] are implemented in the `loo` package [@loo].
+
+# Other possible extensions to model 1
+
+## Item effects
+
+In performing analysis of variance researchers typically average over items (or stimuli) used in the experimental paradigm. This aggregation can be problematic [@clark1973language], especially when dealing with non-linear models like the signal detection theory model we use in our example. Accurate estimation of age differences in performance requires that variability due to item effects be taken into account in a hierarchical model [see @morey2008problematic; @rouder2005introduction]. In the example data set there is a column `item` that codes the stimulus seen on a particular trial. Here we will extend model 1 to allow for item effects on discriminability, $d$. The extension involves adding an "item-level" effect $\alpha^{(d)}_m$ for items $1, ..., M$ ($M = 20$ in the example data set). Thus the expression for $d$ for observation $i$ is:
+$$
+d_{i} = \exp\left(\beta_{0j[i]}^{(d)} + \beta_{1j[i]}^{(d)}x_i + b^{(d)}_{j[i]} + \alpha^{(d)}_{m[i]} \right).
+$$
+
+Note that we are now using the notation $j[i]$ and $m[i]$; this can be read as "the individual or item that observation $i$ relates to" and is similar to the way in which the model is written in Stan as we will see below. The item effect is then assumed to be normally distributed with an estimated standard deviation:
+
+$$
+\alpha^{(d)}_{m} \sim \mbox{Normal}(0, \; \tau^{(\alpha)}).
+$$
+
+To modify model 1 (`SDT_m1.stan`) to include item effects (see `SDT_m1.2.stan`) we first need to add item information to the `data` block:
+
+```
+  int<lower=0> M;               // number of items
+  int<lower=1,upper=M> item[N]; // item ids
+```
+
+We then add to the `paramaters` block:
+```
+  real alpha_d[M];
+  real<lower=0> tau_alpha_d;
+```
+and then change the expression for observation level $d$ to add the item specific deviation:
+```
+d[i] = exp( dot_product(X[i,], B_d) + b_d[id[i]] + alpha_d[item[i]] );
+```
+
+Finally, we just need to modify the `model` block to put priors on the item level parameters:
+```
+  tau_alpha_d ~ cauchy(0, 1);
+  alpha_d ~ normal(0, tau_alpha_d);
+```
+
+We are now ready to fit this model in `R` with `rstan`:
+```{r, echo=T, eval=F}
+# add item information to the data list
+data_list$item = rdat$item
+data_list$M = length(unique(rdat$item))
+
+SDT_m1.2_fit <- stan( # do the sampling
+  file = "models/SDT_m1.2.stan",
+  data = data_list,
+  chains = 4,
+  warmup = 1000,
+  iter = 2000,
+  cores = 4
+)
+```
+
+The following code then extracts the posterior distribution of the item effects and plots them (using `bayesplot`; Figure \ref{fig:item-eff}) from most positive to most negative:
+
+```{r, results='hide', include=F}
+#get rid of an annoying message that I cant figure out...
+bayesplot::mcmc_areas(as.array(SDT_m1.2_fit, pars="alpha_d"), prob = .8)
+```
+
+```{r item-eff, echo=T, fig.cap="Posterior distributions of item effects on $d$. The shaded area is the 80% credible interval.", warnings=F, message=F}
+item_d = as.array(SDT_m1.2_fit, pars="alpha_d") # extract item samples as an array
+
+ord=order(apply(item_d, 3, median), decreasing = T) # order of the posterior medians
+
+bayesplot::mcmc_areas(item_d[,,ord], prob = .8)
+```
+
+Figure \ref{fig:item-d} shows the effect of modeling item differences on our estimate of age differences in discriminabilty. <!--Adding the item effect leads to a somewhat smaller estimate with greater uncertainty (i.e. a wider distribution). While this might seem like an undesirable result, accounting for item variability will results in more accurate estimates of group differences.-->
+
+```{r item-d, echo=F, fig.cap="Comparison of estimated age difference (on log($d$) scale) from model with and without item effects. Points are medians and horizontal lines are 95% highest density intervals."}
+plot(density(age_d), main=bquote(Beta[1]^"(d)"), xlab="", lwd=2, xlim=c(-1,.2), ylim=c(0,4))
+lines(density(age_d1.2), lwd=2, col="red")
+
+h1 = HDInterval::hdi(age_d)
+h2 = HDInterval::hdi(age_d1.2)
+segments(x0 = h1["lower"], x1 = h1["upper"], y0 = .25, y1 = .25, lwd = 3)
+segments(x0 = h2["lower"], x1 = h2["upper"], y0 = .5, y1 = .5, lwd = 3, col="red")
+points(x = c(median(h1), median(h2)), y = c(.25, .5), pch=16, cex=2, col=c("black", "red"))
+
+legend("topright", legend = c("no item effect", "item effect"), text.col = c("black", "red"), bty='n')
+```
+
+## Allow groups to differ in variability (Heteroskedasticity)
+
+A common finding in cognitive aging research is that, in addition to mean differences in task performance, age groups also differ in their variability [i.e., between participant variability often increases with age; e.g., @shammi1998aging]. In model 1 parameter values for participants from different age groups are drawn from the same normal distribution (i.e., one shared standard deviation). We can allow the groups to differ in their variability by estimating separate individual level standard deviation parameters (again using $d$ as the example, $\tau^{(d)}_{1}$ for younger adults and $\tau^{(d)}_{2}$ for older). Therefore, the expression for individual level effects on $d$ becomes:
+
+$$
+b^{(d)}_{j} \sim \mbox{Normal}(0, \; \tau^{(d)}_{g[j]}).
+$$
+
+To implement this in Stan by modifying `SDT_m1.stan` we first add to the `data` block an indicator that codes group membership (0=younger, 1=older):
+```
+  int group[J];  
+```
+
+Then in `parameters` we change `tau_d` to a vector of two real-valued numbers with a lower bound of zero:
+```
+real<lower=0> tau_d[2];
+```
+
+The final change to produce the `SDT_m1.3.stan` model is to change the `model` block to sample individual level effects according to group membership. The `group[j]+1` means that `tau_d[1]` will be selected when group=0 (i.e., younger) and `tau_d[2]` will be selected when group=1 (i.e., older):
+```
+  for (j in 1:J){
+    b_d[j] ~ normal(0, tau_d[group[j]+1]);
+  }
+```
+
+In `R` we then create a vector that codes whether each participant is younger or older and add this to the data list. We then use `stan` to fit the model:
+```{r, echo=T, eval=F}
+# get the group of each participant
+grps = rdat$group[!duplicated(rdat$id)]
+# add to the data list
+data_list$group = as.integer(grps == "O")
+
+SDT_m1.3_fit <- stan(
+  file = "models/SDT_m1.3.stan",
+  data = data_list,
+  chains = 4,
+  warmup = 500,
+  iter = 1000,
+  cores = 4
+)
+
+```
+
+The following `R` code then extracts the `tau_d` samples and plots them in Figure \ref{fig:tau-dens}. The left panel shows the density of each group separately whereas the right panel subtracts the two to plot the difference.
+
+```{r tau-dens, echo=T, fig.cap="Estimates of between participant variability in $d$ for younger and older adults."}
+# extract the samples
+tau_d = extract(SDT_m1.3_fit, pars=c("tau_d"))[[1]]
+
+par(mfrow=c(1,2)) # make a two panel plot
+# plot density for each group
+plot(density(tau_d[,1]), lwd=2, 
+     main=bquote(tau^"(d)"), xlab="", xlim=c(0, .9))
+lines(density(tau_d[,2]), lwd=2, col="blue")
+legend("topright", legend=c("younger", "older"), 
+       text.col=c("black", "blue"), bty="n")
+# plot difference
+tau_diff = apply(tau_d, 1, diff) # or tau_d[,2] - tau_d[,1]
+plot(density(tau_diff), lwd=2, 
+     main=bquote(tau[older]^"(d)" - tau[younger]^"(d)"), xlab="")
+```
+
+The next code chunk then calculates the HDI of the group difference in `tau_d` and the proportion of samples that are above zero difference.
+
+```{r, echo=T}
+# HDI
+HDInterval::hdi(tau_diff)
+# proportion of posterion above zero
+mean(tau_diff > 0)
+```
+
+## Correlate random effects with other measures
+
+Researchers may wish to relate latent cognitive processes to other participant characteristics (e.g., neuropsychological test scores, personality measures, years of education). One way to estimate the correlation between individual differences in model parameters and another measure is to expand the random effects section of the model to include the extra measure. The file `SDT_m1.4.stan` extends `SDT_m1.stan` to estimate the correlation between individual differences in $d$ (the individual level deviations $b_j^{(d)}$) and scores from another measure found in `data/cor-scores.csv`.
+
+To modify model 1 we first change the `data` block to include the score variable. There is one score for each of the `J` participants:
+
+```
+real score[J];
+```
+
+Next we modify the `parameters` block to include parameters for estimating the mean (`mu_score`) and variability (`tau_score`) of the score as well as its correlation with the $d$ random effects (`Sigma`).
+
+```
+  // correlation between individual differences in d
+  // and score from another measure
+  real mu_score; // average score
+  real<lower=0> tau_score; // score SD
+  
+  corr_matrix[2] Sigma; // correlation of d random effect and score
+```
+
+Finally the `model` block is modified to include the priors for the new score associated parameters (remember to consider the scale of variables when setting priors) and to express the assumption that individual deviations in $d$ and the scores on the other measure are sampled from a multivariate normal distribution with a correlation determined by `Sigma`. 
+
+```
+  // priors for mean and SD of score
+  mu_score ~ normal(0, 1);
+  tau_score ~ cauchy(0, 1);
+  
+  // prior for correlation between score and individual b_ds
+  Sigma ~ lkj_corr(1.0);
+  
+  // individual level deviations
+  for (j in 1:J){
+    [b_d[j],score[j]] ~ multi_normal([0,mu_score], quad_form_diag(Sigma, [tau_d,tau_score]));
+  }
+```
+
+In `fit_SDT.R` we add the scores to the data list and then fit the model. 
+
+```{r, echo=T, eval=F}
+scores = read.csv("data/cor-scores.csv") # one score for each person
+
+data_list$score = scores$score
+
+SDT_m1.4_fit <- stan(
+  file = "models/SDT_m1.4.stan",
+  data = data_list,
+  chains = nchains,
+  warmup = nwarm,
+  iter = niter,
+  pars=c("d", "s", "a", "b", "c", "theta"),
+  include=F
+)
+
+```
+
+The code below produces Figure \ref{fig:score-cor} which plots the correlation matrix (`Sigma`). `Sigma[1,2]` and `Sigma[2,1]` refers to the correlation between the score and individual differences in $d$.
+
+```{r score-cor, echo=T, fig.cap="Plot of the Sigma parameter from model 1.4"}
+plot(SDT_m1.4_fit, pars="Sigma")
+```
+
+The code below then extracts the samples associated with the correlation and calculate some quantities of interest. 
+
+```{r, echo=T}
+# extract the correlation samples
+rho = extract(SDT_m1.4_fit, pars="Sigma[1,2]")[[1]]
+# posterior mean and median
+mean(rho)
+median(rho)
+# and 95% credible intervals
+quantile(rho, probs = c(0.025, .975))
+```
+
+# Exploring age by condition interactions (model 3)
+
+The main manuscript describes how to implement a model that takes condition into account when estimating group differences in discriminability, $d$. The Stan model is contained in `SDT_m3.stan` and samples from this model are saved in the `R` object `SDT_m3_fit`. The following `R` code shows how to extract the relevant samples from this model, convert them into posterior samples of $d$ for each group in each condition:
+
+```{r, echo=T}
+
+# extract the group level effects for d
+B_d = extract(SDT_m3_fit, pars="B_d")[[1]]
+
+# convert back to d scale for both groups and conditions
+# condition A was coded 0 and B coded 1
+# group Y was coded 0 and group O coded 1
+# therefore, we can multiply the matrix of B_d samples
+# by particular vectors that code for group and condition
+
+d_youngA = exp( B_d %*% c(1,0,0,0) ) # use exp to transform to d
+d_youngB = exp( B_d %*% c(1,0,1,0) )
+d_oldA = exp( B_d %*% c(1,1,0,0) )
+d_oldB = exp( B_d %*% c(1,1,1,1) )
+
+```
+
+```{r inter, echo=F, fig.cap="Density plots of posterior samples of $d$ by age group and condition (left). Plots of age group differences (younger - older) by condition and the condition difference in these differences (right; i.e., how much larger was the age difference in condition A relative to condition B?)."}
+
+par(mfrow=c(1,2))
+plot(density(d_youngA), lwd=2, xlim=c(.5,3.5), ylim=c(0,5), main="d", xlab="")
+lines(density(d_youngB), lwd=2, lty=3)
+lines(density(d_oldA), lwd=2, col="blue")
+lines(density(d_oldB), lwd=2, col="blue", lty=3)
+legend("topright", legend = c("Younger", "Older", "A", "B"), 
+       lty = c(NA, NA, 1, 3), lwd=c(NA, NA, 2, 2),
+       text.col = c("black", "blue", "black", "black"), bty="n")
+
+plot(density(d_youngA - d_oldA), lwd=2, xlim=c(-1.5,2.5), ylim=c(0,3), main="d - group differences\nby condition", xlab="")
+lines(density(d_youngB - d_oldB), lwd=2, lty=3)
+lines(density((d_youngA - d_oldA) - (d_youngB - d_oldB)), lwd=2, col='red')
+legend("topleft", legend = c("A", "B", "Difference (A - B)"), 
+       lty = c(1, 3, 1), lwd=c(2, 2, 2), col=c("black", "black", "red"), bty="n")
+
+```
+
+Figure \ref{fig:inter} presents density plots of these posterior samples (the `fit_SDT.R` contains the code to create these plots). In addition to plotting we can also calculate quantities of interest, like highest density intervals:
+
+```{r, echo=T}
+library(HDInterval)
+# group difference in condition A
+hdi(d_youngA - d_oldA) 
+# group difference in condition B
+hdi(d_youngB - d_oldB) 
+# difference of differences (i.e., interaction)
+hdi((d_youngA - d_oldA) - (d_youngB - d_oldB)) 
+```
+
+The age difference in $d$ is approximately `r round(mean((d_youngA - d_oldA) - (d_youngB - d_oldB)), 2)` larger in condition A relative to condition B, with a 95% HDI of [`r round(hdi((d_youngA - d_oldA) - (d_youngB - d_oldB))[[1]], 2)`, `r round(hdi((d_youngA - d_oldA) - (d_youngB - d_oldB))[[2]], 2)`]. 
+
+# Multinomial Processing Tree Modeling Tutorial 
+
+```{r, echo=F}
+knitr::opts_knit$set(root.dir = normalizePath("MPT/"))
+```
+
+The signal detection theory (SDT) models described in detail in the main text assume that the representation of information underlying discrimination and response selection is continuous or graded. In contrast to this assumption, a competing class of models -- multinomial processing tree (MPT) models -- assumes that this representation is mediated by discrete mental states. The most common MPT used in studies of recognition memory is the Two-High-Threshold model [2HTM; @SnodgrassAndCorwin1988], which assumes three discrete states created by the partitioning of the decision process by two latent thresholds, one corresponding to a detect-old state and the other to a detect-new state. If the signal passes the upper or lower threshold, then with 100% certainty the participant will recognize the item as "old" or "new," respectively. Otherwise, if the signal falls between these two thresholds, the participant is in a state of uncertainty and then must guess whether the signal is old or new. The 2HTM can be conceived as a variant of a SDT model with rectangular as opposed to Gaussian distributions [@Swets1986b], but there is much debate as to which model is more appropriate for modeling recognition memory (and other choice discrimination) data [e.g., @DubeAndRotello2012; @KlauerAndKellen2011; @PazzagliaEtAl2013; @ProvinceAndRouder2012]. 
+
+Nevertheless, MPTs are useful measurement models as they provide a parametric way to link psychological theory to observed responses [@BatchelderAndRiefer1999]. Given their popularity in many domains of psychology, we offer a brief overview of how to fit MPTs to derive age comparisons on parameters corresponding to different cognitive processes. We use an example of fitting @BroderEtAl2013's ratings-extension of the 2HTM to the ratings data reported in the main text, but this approach can be applied more broadly to other types of MPTs.
+
+Although MPTs can be implemented in Stan, like our example of SDT models in the main text, there are many useful `R` packages for fitting MPTs, and our preference is the `TreeBUGS` package [@HeckEtAl2018], as it incorporates the most up-to-date advances in MPT modeling. Specifically, the `TreeBUGS` package allows for estimation of hierarchical Bayesian MPTs, which enable researchers to account for the heterogeneity in responses across participants in a principled way, with individual parameters drawn from a parent distribution. Response heterogeneity across participants is not accounted for in fits of MPTs to the aggregate, in which observations are assumed to be independent and identically distributed (i.i.d.) for all participants. Violations of the i.i.d. assumption can result in biased parameter estimates and erroneous confidence intervals [@Klauer2006; @SmithAndBatchelder2008; @SmithAndBatchelder2010]. The `TreeBUGS` package makes it easy to test for participant heterogeneity before model fitting; if heterogeneity is present, it is recommended that the researcher proceed with a hierarchical Bayesian model. The `TreeBUGS` package interfaces with the Markov chain Monte Carlo sampler JAGS [@Plummer2003] via the `R` package `runjags` [@Denwood2016runjags] and allows users to specify either the latent-trait [@Klauer2010] or beta MPT [@SmithAndBatchelder2010] model, two principled models for dealing with participant heterogeneity.
+
+## The model
+
+@BroderEtAl2013 introduced a ratings-extension of the 2HTM, which includes the original model's parameters of Old and New detection ($p_{o}$ and $p_{n}$) and proclivity to guess "old" in the uncertain state ($b$), as well as response mapping parameters to relate responses to the different ratings (1 through 6, in our ratings task). If a participant enters a detect state (with probability $p_{0}$ for Old items or $p_{n}$ for New items), he or she traverses a response parameter $r_{i}$, denoting the probability of responding with rating $i$. For the detect-old state, $r_{i}$ can take on a rating of 4, 5, or 6 (as these ratings correspond to "maybe old", "probably old," and "sure old," respectively); for the detect-new state, these values are 3, 2, or 1. Thus, if a participant is in one of the detection states, he or she will not give a rating from the opposite range of the scale (e.g., assigning a "maybe new" rating to an Old item in the detect-old state). However, if the participant is in the uncertain state, recognition judgments are based solely on guessing, such that all ratings are possible. The probability of assigning rating $i$ in the uncertain state is given by $q_{i}$.
+
+Full model equations describing the probability of providing rating $i$ to Old and New items are given in Table 1 of @BroderEtAl2013 and are reproduced in a text editor, converted to a .eqn file, to be read into `R` for analysis with the `TreeBUGS` package. Specifically, we use the model equations of the binary reparameterisation of @BroderEtAl2013's extended 2HTM. 
+
+```{r, echo=T}
+
+readEQN("2htmratings.eqn")
+```
+
+The column `Tree` in the output indicates that there are two separate trees, one for Old items and one for New items, and each tree is defined by its own unique multinomial distribution. The `Category` column gives the observed rating category. The `Equation` column specifies the model equations linking the detection parameters ($p_{o}$ and $p_{n}$), the guessing parameter ($b$), and the response mapping parameters ($r_{i}$ for detect-states, and $q_{i}$ for uncertain state) to the observed ratings in the `Category` column. 
+
+There are 11 free parameters ($p_{o}$, $p_{n}$, $b$, $r_{6}$, $r_{5}$, $r_{1}$, $r_{2}$, $q_{6}$, $q_{5}$, $q_{1}$, and $q_{2}$) but only ten degrees of freedom, so the model is oversaturated. (Note also that there are no ratings parameters for the (4) "maybe old" or (3) "maybe new" ratings, as these values take the remainder of the conditional probability at the node of the tree branching into their adjacent ratings, e.g., $r_{4}$ = (1-$r_{6}$)*(1-$r_{5}$).) To address this non-identifiability issue, parameter restrictions are required. We have chosen to impose equality restraints on the response mapping parameters in the uncertain state, assuming participants use the scale symmetrically in this state (i.e., $q_{1}$ = $q_{6}$ and $q_{2}$ = $q_{5}$, such that also $q_{3}$ = $q_{4}$; see @BroderEtAl2013). Alternative possibilities can be entertained, resulting in different models that represent unique subclasses of the full parameter space, and thereby motivating a model comparison approach (see main text for details about model comparison). However, for this brief tutorial, we will only focus on this specific model to demonstrate how to compare parameters of the same MPT model across age groups.
+
+Because we will be fitting this model to the simulated data reported in the main text, which included a within-subject condition variable, we have to extend the MPT model to include separate trees for each condition (A and B). We can use the `withinSubjectEQN` command to expand our tree structure.
+
+```{r, echo=T}
+
+withinSubjectEQN("2htmratings.eqn", labels=c("A","B"), save="2htmratings2.eqn")
+```
+
+The output looks much more complicated, but it is simply the same set of equations repeated separately for each within-subject condition. 
+
+## Reading the Data
+
+The data must be a table (either as a matrix or data frame in `R` or read into `R` as a comma-separated file) of individual frequencies. Each row corresponds to a participant, and each column gives the observed categories. 
+
+The following R code reads in the data then splits it into young and old adult groups. Note that we will be fitting the ratings MPT separately to each age group, which is analogous to assuming the variability in parameter estimates differs between young and older adults. 
+
+```{r, echo=T}
+
+d <- read.csv("examplempt.csv")
+do <- subset(d, Group=="O", select=-(1:2)) #Old adults
+dy <- subset(d, Group=="Y", select = -(1:2)) #Young adults
+
+head(dy) #First 6 rows of the YA data
+```
+
+The output of the `head` command shows the categorical ratings in the first row. The next six rows are the data from first six young adult participants.
+
+## Testing for Participant Heterogeneity
+
+Next, we test for homogeneity of responses across participants (in each age group). In the `R` code below, the `tree` argument indicates which columns in the frequency table pertain to Old or New items. In the MPT framework, each item type belongs to a separate multinomial distribution.
+
+```{r, echo=TRUE, eval=FALSE}
+
+testHetChi(freq=dy, tree=c("A_Old", "A_Old", "A_Old", "A_Old", "A_Old", "A_Old",
+                           "A_New", "A_New", "A_New", "A_New", "A_New", "A_New",
+                           "B_Old", "B_Old", "B_Old", "B_Old", "B_Old", "B_Old",
+                           "B_New", "B_New", "B_New", "B_New", "B_New", "B_New"))
+
+testHetChi(freq=do, tree=c("A_Old", "A_Old", "A_Old", "A_Old", "A_Old", "A_Old",
+                           "A_New", "A_New", "A_New", "A_New", "A_New", "A_New",
+                           "B_Old", "B_Old", "B_Old", "B_Old", "B_Old", "B_Old",
+                           "B_New", "B_New", "B_New", "B_New", "B_New", "B_New"))
+```
+
+The resulting test statistics, $\chi^2(460) = 841.25, p < .001$ for the young adults, and $\chi^2(460) = 828.72, p < .001$ for the old adults, indicate there is substantial heterogeneity between participants in both age groups. Thus, fitting an MPT to the aggregate (i.e., via maximum likelihood) would be inappropriate in this context (notably, this also illustrates the suitability of fitting hierarchical SDT models, as reported in the main text).
+
+## Fitting a hierarchical Bayesian MPT to each data set
+
+The next step is to fit the model (whose equations are defined above in the .eqn file) to the data for each group, separately. `TreeBUGS` [@HeckEtAl2018] enables users to specify either a latent-trait [@Klauer2010] or beta-MPT [@SmithAndBatchelder2010], which define the hyperpriors placed on the population-level distributions of MPT parameters. More information about these model specifications are given in the respective sources, but here we will fit the latent-trait model as it accounts for the correlations among MPT parameters. In the latent-trait model, each individual participant $p_{i}$ has a unique parameter vector, $\theta_{p_{i}}$, which is probit-transformed to ensure only positive values (as all parameters in MPT models are probabilities and constricted to fall within the unit interval). In turn, each $\Phi^{(-1)}(\theta_{p_{i}})$ is drawn from a multivariate normal distribution with group mean $\boldsymbol\mu$ and variance-covariance matrix $\boldsymbol\Sigma$. Hyperpriors can be placed on $\boldsymbol\mu$ and $\boldsymbol\Sigma$ and can be defined separately for each parameter in the MPT model. By default, `TreeBUGS` [@HeckEtAl2018] uses weakly informative priors based on work by @Klauer2010 and @MatzkeEtAl2015. Each $\mu_{s}$, where $s$ denotes each parameter in the model, follows a standard normal distribution. A scaled inverse Wishart prior is used for $\boldsymbol\Sigma$, where the Wishart prior is scaled by a scaling parameter for each parameter, $\xi_{s}$. `TreeBUGS` assumes a uniform [0,10] prior on the scaling parameters $\xi_{s}$. Although these priors can be changed, and the `TreeBUGS` tutorial [@HeckEtAl2018] discusses how this can be done, we will use the program's default priors in our current implementation to the ratings data. 
+
+The following `R` code is used to fit the ratings-2HTM [@BroderEtAl2013] to the young and old adult data sets. The hashtags describe what each argument is doing.
+
+```{r, echo=TRUE, eval=FALSE}
+
+##Young Adult Model
+
+young1 <- traitMPT(eqnfile="2htmratings2.eqn", #fit a latent-trait MPT 
+                  #using the ratings-2HTM equations
+                  data=dy, #frequencies for young adults
+                  restrictions=list("q1_A=q6_A","q2_A=q5_A",
+                                    "q1_B=q6_B", "q2_B=q5_B"), #parameter restrictions
+                  modelfilename="young.jags", #saves the JAGS script
+                  parEstFile="youngratings.txt", #saves the output to a text file
+                  posteriorFile = "youngratingsmod.RData",
+                  n.iter=75000, #number of MCMC iterations to run
+                  n.chain=4, #number of chains 
+                  n.adapt=15000, #Adaptation period (to obtain convergence)
+                  n.burnin = 10000, #burn-in period (these chains are discarded)
+                  n.thin=10) #thinning rate (retains every 10 chains)
+
+#Adaptation successful after 15,000 iterations
+#Sampling time took 18.71 minutes
+
+##Old Adult Model
+old1 <- traitMPT(eqnfile="2htmratings2.eqn", 
+                   data=do, #frequencies for old adults
+                   restrictions=list("q1_A=q6_A","q2_A=q5_A",
+                                     "q1_B=q6_B", "q2_B=q5_B"), 
+                   modelfilename="old2.jags", 
+                   parEstFile="oldratings2.txt", 
+                   posteriorFile = "oldratingsmod2.RData",
+                   n.iter=75000, 
+                   n.chain=4,  
+                   n.adapt=15000, 
+                   n.burnin = 10000,
+                   n.thin=10) 
+
+#Adaptation successful 
+#Sampling time of 18.11 minutes
+
+
+```
+
+The adaptation was successful in fitting the model to both data sets, indicating the four posterior chains converged within the adaptation period. If the adaptation period is not successful, it is recommended that the researcher increases the number of adaptation chains, as otherwise the posterior samples will not be optimal and may not be interpretable. 
+
+In the below code, we load in the fitted model summaries for further analysis.
+
+```{r, echo=TRUE, eval=TRUE}
+load("youngratingsmod.RData")
+fittedModelY <- fittedModel
+load("oldratingsmod2.RData")
+fittedModelO <- fittedModel
+```
+
+First, we can assess model fit to the observed data by plotting the model predictions against the observed frequencies in the data. 
+
+```{r, echo=FALSE, eval=TRUE}
+
+plotFit <- function(fittedModel, M=1000, stat = "mean", ...){
+  
+  stat <- match.arg(stat, c("mean", "cov"))
+  
+  # get information about model:
+  tree <- fittedModel$mptInfo$MPT$Tree
+  cats <- fittedModel$mptInfo$MPT$Category
+  dat <- fittedModel$mptInfo$dat[,cats]
+  TreeNames <- unique(tree)
+  
+  # free categories (drop last category per tree):
+  #free_cats <- unlist(tapply(X = cats, INDEX = tree,
+  #FUN = function(cat) cat[-length(cat)]))
+  
+  # get posterior predictive:
+  if(is.null(fittedModel$postpred) | M != 1000){
+    freq.list <- posteriorPredictive(fittedModel, M=M)
+  }else{
+    freq.list <- fittedModel$postpred$freq.pred
+  }
+  
+  if(stat == "mean"){
+    # Plot mean frequencies:
+    
+    pred <- t(sapply(freq.list, colMeans))
+    boxplot(pred[,cats], xaxt="n", col="gray",
+            main="Observed (Red) and Predicted (Boxplot) Mean Frequencies", las=1, ...)
+    axis(1, 1:length(cats), labels=FALSE) 
+    xx <- by(1:length(tree), tree, mean)
+    axis(1, xx,  TreeNames, tick=F, line=NA)
+    points(1:length(cats), colMeans(dat)[cats], col="red", cex=1.4, pch=17)
+    abline(v=cumsum(table(tree))[1:(length(TreeNames)-1)]+.5, col="gray")
+    
+  } else if (stat == "cov"){
+    # Plot covariance of frequencies:
+    
+    nams <- outer(cats, cats, paste, sep="-")
+    sel_cov <- nams[upper.tri(nams, diag = TRUE)]
+    K <- length(sel_cov)
+    
+    # observed/predicted
+    c.obs <- cov(dat[,cats])
+    c.pred <- sapply(freq.list, function(xx){
+      cc <- cov(xx[,cats])
+      cc[upper.tri(cc, diag=TRUE)]
+    })
+    
+    boxplot(t(c.pred), col="gray", ylab="Covariance",
+            main="Observed (red) and predicted (gray) covariances",
+            xaxt="n", las=1, ...)
+    abline(h=0, lty=1, col="gray")
+    axis(1, 1:K, labels = nams[upper.tri(nams, diag=TRUE)], las=2)
+    points(1:K, c.obs[upper.tri(c.obs, diag=TRUE)], col=2, pch=17)
+    abline(v = cumsum(seq(nrow(c.obs), 2, -1))+.5, col="lightgray")
+  }
+}
+
+```
+
+```{r, echo=TRUE, eval=TRUE}
+
+plotFit(fittedModelY)
+```
+
+The model is capturing the frequencies in the young adult data well, although there are some slight discrepancies.
+
+```{r, echo=TRUE, eval=TRUE}
+
+plotFit(fittedModelO)
+```
+
+The model also captures the frequencies in the old adult data well. Overall, the model has apparently good fit to the two data sets, even as it is undersaturated relative to the degrees of freedom in the data. Nevertheless, a good fit to one data set is not sufficient if the model's predictive accuracy to unobserved data is poor. 
+
+Therefore, the next crucial step in assessing model fit is in generating posterior predictive fits of the model to unobserved data. We can take the fitted model applied to each data set (from the young and old adults) and use it to compute posterior samples. This is easy to implement in the `TreeBUGS` package [@HeckEtAl2018], which computes two statistics first proposed by @Klauer2010. The $T_{1}$ test statistic compares the observed means (for each participant, as well as the group-level mean) to those of the posterior-predicted data, while the $T_{2}$ statistic does the same for the covariances. The proportion of samples is computed for which $T_{observed}$ < $T_{predicted}$ for each test statistic, yielding a posterior predictive $p$ value (PPP). Although not to be confused with a frequentist $p$ value, PPP values that are small (near 0) indicate insufficient model fit to posterior-predicted data. 
+
+The `PPP` function below resamples 1,000 posterior samples from the fitted model and computes the $T_{1}$ and $T_{2}$ statistics at both the group and individual-level. 
+
+```{r, echo=TRUE, eval=TRUE}
+
+PPP(fittedModelY)
+```
+
+The output displays the mean and covariance test statistics at the group-level, as well as individual-level fits of the $T_{1}$ statistic. The resulting PPP values are in an acceptable range (>.05) for all fit statistics in the young adult group, indicating satisfactory model fit. The same is true of the old adult model (see output below).
+
+```{r, echo=TRUE, eval=TRUE}
+
+PPP(fittedModelO)
+```
+
+Now that we have demonstrated satisfactory model fit, we can summarize the results from each model, and compare parameters across the models to derive age differences. The function below extracts the posterior group-level mean parameter estimates and 95% Bayesian credible intervals, while individual means appear in gray.
+
+```{r, echo=TRUE, eval=TRUE}
+
+#Young adults' memory and guessing parameters
+plotParam(fittedModelY, select=c("b_A", "b_B", "pn_A", "pn_B", "po_A", "po_B"))
+
+#Young adults' response mapping parameters
+plotParam(fittedModelY, select=c("q1_A", "q1_B", "q2_A", "q2_B", "r1", "r2",
+                                 "r5", "r6"))
+
+#Old adults' memory and guessing parameters
+plotParam(fittedModelO, select=c("b_A", "b_B", "pn_A", "pn_B", "po_A", "po_B"))
+
+#Old adults' response mapping parameters
+plotParam(fittedModelO, select=c("q1_A", "q1_B", "q2_A", "q2_B", "r1", "r2",
+                                 "r5", "r6"))
+```
+
+We will focus now on deriving between-group comparisons on the memory parameters ($p_{o}$ and $p_{n}$) across condition A and B. A visual inspection of these estimates in the posterior plots above suggests that older and younger adults likely have very similar values of the detect-new parameter, but that for detect-old, there may be an interaction with age, given that older adults' estimates of $p_{o}$ in Condition A is much smaller than the corresponding estimate of $p_{o}$ in this condition among younger adults, whereas the 95% CI of the estimates in $p_{o}$ for Condition B overlap across age groups. 
+
+The below function computes a comparison on the detection parameters across the two fitted models. The function computes the difference in mean parameters (young adults minus old adults) and the proportion of samples for which the mean in the young adult group is less than the mean in the old adult group.
+
+```{r, echo=TRUE, eval=TRUE}
+
+#Are there age differences in detect-old probability in Condition A?
+betweenSubjectMPT(fittedModelY, fittedModelO, par1="po_A")
+
+#Are there age differences in detect-old probability in Condition B?
+betweenSubjectMPT(fittedModelY, fittedModelO, par1="po_B")
+```
+
+The results show that the difference in detect-old probability in condition A between young and old adults is about 0.62 (with a 95% CI ranging from 0.48 to 0.75), and that there are 0% of samples for which young adults had a smaller value of $p_{o}$ than older adults. However, in Condition B, the mean difference of 0.25, with a 95% CI from -0.08 to 0.59, does include 0 within the interval, meaning that we cannot rule out the possibility that there is no age difference in this parameter. 
+
+
+\newpage
+
+# References
+
+\begingroup
+\setlength{\parindent}{-0.5in}
+\setlength{\leftskip}{0.5in}
+
+<div id="refs" custom-style="Bibliography"></div>
+\endgroup

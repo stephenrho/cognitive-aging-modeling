@@ -1,2 +1,10 @@
 models/*.rds
 useful-links.txt
+.Rproj.user
+moved-from-dropbox/
+*.Rproj
+cognitive-modeling_cache/
+cognitive-modeling_files/
+cognitive-modeling-supplement_cache/
+cognitive-modeling-supplement_files/
+*.tex
