@@ -42,6 +42,7 @@ class             : "man"
 output            : papaja::apa6_pdf
 header-includes:
   - \raggedbottom
+  - \interfootnotelinepenalty=10000
 ---
 
 ```{r setup, include=FALSE}

@@ -8,3 +8,5 @@ cognitive-modeling_files/
 cognitive-modeling-supplement_cache/
 cognitive-modeling-supplement_files/
 *.tex
+.Rhistory
+.~lock*
