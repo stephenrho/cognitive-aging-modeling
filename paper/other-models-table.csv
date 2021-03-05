@@ -1,0 +1,5 @@
+Model,Brief Description,Selected references,Related models
+Multinomial processing tree models of source monitoring,"To judge the source of previously studied information or whether a test probe is a new lure participants are assumed to enter distinct cognitive states in sequence. For example, they may detect that a particular probe is old but then fail to detect the source of the probe in which case they would have to guess between sources. This is in contrast to SDT in which participants are assumed to monitor a continuous decision variable (e.g., familiarity) and not enter a discrete detect/not-detect state.",@bayen1996source,"Threshold models of signal detection [e.g., @SnodgrassAndCorwin1988]. Dual process model of recollection and familiarity [e.g., @yonelinas1994receiver]. Models of the capacity of working memory [e.g., @RouderEtAl2011]."
+Diffusion model of choice reaction time and accuracy,,@Ratcliff1978,Linear ballistic accumulator model [@BrownAndHeathcote2008]
+Mixture model of recall error,,,Variable precision models (van den berg ma)
+Prototype models of category learning,,,
