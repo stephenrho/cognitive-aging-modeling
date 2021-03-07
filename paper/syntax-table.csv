@@ -1,15 +1,16 @@
 Syntax,Explanation
-int<lower=1> N;,N is an integer (int) and cannot be lower than 1
-int y[N];,"y contains N integers and y is an array (arrays are different from vectors and matrices, which are limited to one and two dimensions, respectively)"
-"int<lower=1,upper=J> id[N];",id contains N integers that must be between 1 and J (where J is also an integer)
-1:(K-1),"produces a sequence of integers between 1 and K-1 (e.g., if K is 6 the result would be [1,2,3,4,5])"
-"matrix[N, 2] X;",X is a matrix with N rows and 2 columns
-vector[N] sig_trial;,sig_trial is a vector of N numbers
-real b_d[J];,b_d is an array of J numbers that can take any value
-real<lower=0> tau_d;,tau_d is a single number that can take any value of 0 or greater
-for (i in 1:N){ … },produce a sequence of integers between 1 and N and for each integer (I) in this sequence run the code between the braces (note i is often used by convention but doesn’t have to be)
-x = 1;,x is assigned the value of 1
-"x ~ normal(0, 1);",x is assumed to be normally distributed with a mean of 0 and a standard deviation of 1
-"b[i] = dot_product(X[i,], B_b) ",the element of b in position i is equal to the dot product of row i of matrix X and B_d
-b_b[id[i]];,find the id of the participant that observation i comes from (id[i]) and use this to select the value of b_b corresponding to that id
-y[i] ~ categorical(theta[i]);,element i of y is sampled from a categorical distribution with probabilities determined by element i of theta
+\texttt{int<lower=1> N;},\texttt{N} is an integer (int) and cannot be lower than 1
+\texttt{int y[N];},"\texttt{y} contains \texttt{N} integers and \texttt{y} is an array (arrays are different from vectors and matrices, which are limited to one and two dimensions, respectively)"
+"\texttt{int<lower=1,upper=J> id[N];}",\texttt{id} contains \texttt{N} integers that must be between 1 and \texttt{J} (where \texttt{J} is also an integer)
+\texttt{1:(K-1)},"produces a sequence of integers between 1 and \texttt{K}-1 (e.g., if \texttt{K} is 6 the result would be \texttt{[1,2,3,4,5]})"
+"\texttt{matrix[N, 2] X;}",\texttt{X} is a matrix with \texttt{N} rows and 2 columns
+\texttt{vector[N] sig\_trial;},\texttt{sig\_trial} is a vector of \texttt{N} numbers
+\texttt{real b\_d[J];},\texttt{b\_d} is an array of \texttt{J} numbers that can take any value
+\texttt{real<lower=0> tau\_d;},\texttt{tau\_d} is a single number that can take any value of 0 or greater
+\texttt{for (i in 1:N)\{ \ldots \}},produce a sequence of integers between 1 and \texttt{N} and for each integer (\texttt{i}) in this sequence run the code between the braces (note \texttt{i} is often used by convention but doesn’t have to be)
+\texttt{x = 1;},\texttt{x} is assigned the value of 1
+"\texttt{x \textasciitilde{} normal(0, 1);}",\texttt{x} is assumed to be normally distributed with a mean of 0 and a standard deviation of 1
+"\texttt{b[i] = dot\_product(X[i,], B\_b) }",the element of \texttt{b} in position \texttt{i} is equal to the dot product of row \texttt{i} of matrix \texttt{X} and \texttt{B\_d}
+\texttt{b\_b[id[i]];},find the \texttt{id} of the participant that observation \texttt{i} comes from (\texttt{id[i]}) and use this to select the value of \texttt{b\_b} corresponding to that \texttt{id}
+\texttt{y[i] \textasciitilde{} categorical(theta[i]);},element \texttt{i} of \texttt{y} is sampled from a categorical distribution with probabilities determined by element \texttt{i} of \texttt{theta}
+\texttt{exp(log(k) – log(K))},"if \texttt{k} and \texttt{K} are integers the result of \texttt{k\/K} will also be an integer, which is not what we want when setting the unbiased criteria of the SDT model. Subtracting the logarithms and taking the exponent produces the non-integer result we desire"

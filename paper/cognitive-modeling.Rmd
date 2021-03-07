@@ -25,12 +25,13 @@ authornote: |
 
 abstract: |
   Cognitive aging researchers are interested in understanding how cognitive processes change in old age, but the relationship between hypothetical latent cognitive processes and observed behavior is often complex and not fully accounted for in standard analyses (e.g., ANOVA). Cognitive models formalize the relationship between underlying processes and observed behavior and are more suitable for identifying what processes are associated with aging. This article provides a tutorial on how to fit and interpret cognitive models to measure age differences in cognitive processes. We work with an example of a two choice discrimination task and describe how to fit models in the highly flexible modeling software Stan. We describe how to use hierarchical modeling to estimate both group and individual effects simultaneously, and we detail model fitting in a Bayesian statistical framework, which, among other benefits, enables aging researchers to quantify evidence for null effects. We contend that more widespread use of cognitive modeling among cognitive aging researchers may be useful for addressing potential issues of non-replicability in the field, as cognitive modeling is more suitable to addressing questions about what cognitive processes are (or are not) affected by aging.    
-  
+
 keywords          : "Signal Detection Theory; Cognitive Aging; Mathematical Models"
 
 bibliography      : ["refs.bib"]
 no-cite: |
-  @R-papaja
+  @R-papaja, @bayen1996source, @MeiserAndBroder2002, @BoywittEtAl2012, @SnodgrassAndCorwin1988, @yonelinas1994receiver, @RouderEtAl2011, @Ratcliff1978, @ratcliff2008diffusion, @BrownAndHeathcote2008, @wagenmakers2007ez, @zhang2008discrete, @bays2009precision, @rhodes2020age, @souza2016no, @van2012variability, @oberauer2017interference
+
 figsintext        : yes
 figurelist        : no
 tablelist         : no
@@ -53,6 +54,7 @@ knitr::opts_knit$set(root.dir = normalizePath("../"))
 
 library(rstan)
 library(bayesplot)
+library(xtable)
 
 SDT <- function(d, k, s = 1){
   f = pnorm(-d/2 - k)
@@ -66,7 +68,7 @@ ratingModel <- function(d, s, a, b, C, ratingProbs = T, lastPoint = T){
   unb = -log((1 - 1:C/C)/(1:C/C))
   
   thresh = a*unb + b
-
+  
   f = (diff(pnorm(c(-Inf, thresh),0,1)))
   h = (diff(pnorm(c(-Inf, thresh),d,s)))
   if (!ratingProbs){
@@ -94,7 +96,7 @@ plotSDT <- function(d = 2, s = 1, a = 1, b = 0, C = 6, title = F, allpars=F){
   yscale = ifelse(allpars, 1.8, 1.5)
   
   xseq = seq(from=xrange[1], to=xrange[2], length.out = 1000)
-
+  
   unb = -log((1 - 1:C/C)/(1:C/C))
   thresh = a*unb + b
   thresh = thresh[1:(C-1)]
@@ -105,7 +107,7 @@ plotSDT <- function(d = 2, s = 1, a = 1, b = 0, C = 6, title = F, allpars=F){
   curve(expr = dnorm(x, 0, 1), from=xrange[1], to=xrange[2], n = 10000, add = T)
   polygon(c(xrange[1], xseq, xrange[2]), c(0, dnorm(xseq, d, s), 0), col = oldcol , border = NA)
   curve(expr = dnorm(x, d, s), from=xrange[1], to=xrange[2], n = 10000, add = T)
-
+  
   for (k in 1:(C-1)){
     lines(x = c(thresh[k], thresh[k]), y = yrange*c(0, 1.35), lty=2, col='darkgrey')
     text(x = thresh[k], y = yrange[2]*1.4, labels = bquote('c'[.(k)]))
@@ -202,8 +204,8 @@ dat.t$Year <- factor(dat.t$Year)
 #write.csv(dat.t, "psych_aging_tibble.csv")
 
 fig_a <- ggplot(data=dat.t, 
-                  mapping = aes(x = Year, y = Prop_LatentProcess,
-                                group=1)) +
+                mapping = aes(x = Year, y = Prop_LatentProcess,
+                              group=1)) +
   geom_point() + geom_line() +
   labs(title="DV = Measure of Latent Processes", tag="a") +
   theme_bw() +
@@ -214,8 +216,8 @@ fig_a <- ggplot(data=dat.t,
   scale_y_continuous(name="Proportion of Studies", limits=c(0,1.0))
 
 fig_b <- ggplot(data=dat.t, 
-                  mapping = aes(x = Year, y = Prop_FitModel_given_LatentProcess,
-                                group=1)) +
+                mapping = aes(x = Year, y = Prop_FitModel_given_LatentProcess,
+                              group=1)) +
   geom_point() + geom_line() +
   labs(title="Fit a Cognitive Model to Latent Process DV", tag="b") +
   theme_bw() +
@@ -230,9 +232,28 @@ comb
 
 ```
 
-
-
 Clearly, cognitive modeling remains the exception, rather than the norm, in cognitive aging research. In the next section, we describe how to fit a SDT account of data from a discrimination task (e.g., a recognition memory study) with a focus on testing age differences in underlying parameters. Specifically, we describe how to implement these as hierarchical models that simultaneously model individual participant and group level effects.
+
+```{r, results="asis"}
+
+# library(papaja)
+# library(knitr)
+# library(kableExtra)
+
+other_tab = read.csv("paper/other-models-table.csv")
+
+#kable(other_tab, format = "markdown", booktabs=T)
+
+strCaption <- paste0("Selected models that were also used in papers identified by our review of Psychology and Aging between 2011 and 2020. The references and related/competing models are not exhaustive.")
+
+print(xtable(other_tab, caption = strCaption, label = 'tab:oth', 
+             align = c("p{0.0\\textwidth}",
+                       "p{0.2\\textwidth}",
+                       "p{0.60\\textwidth}",
+                       "p{0.20\\textwidth}",
+                       "p{0.40\\textwidth}")), caption.placement = 'top', hline.after = NULL, include.colnames = F, include.rownames = F, sanitize.text.function = force, floating=TRUE, table.placement = 't', comment=F, scalebox = .7, add.to.row = list(pos = list(-1, nrow(other_tab)),       command = c(paste0("\\toprule \n", "Model & Brief description & Selected references & Selected related/competing models\\\\\n","\\midrule \n"), paste0("\\bottomrule \\\\\ "))))
+
+```
 
 # Modeling Age Differences in Choice Discrimination
 
@@ -272,7 +293,7 @@ text(x = 5, y = x[5,2], labels = "signal", adj = c(1.1,-.5), col = sig_col)
 par(pty='s', mar=c(2,2,.5,.5))
 plot(ratingModel(d = ps[1], s = ps[2], a = ps[3], b = ps[4], C = 1000, ratingProbs = F),
      ylim=c(0,1), xlim=c(0,1), type='l', axes=F, xlab="", ylab="")
-     #xlab='false-alarm rate', ylab='hit rate')
+#xlab='false-alarm rate', ylab='hit rate')
 box()
 axis(1, at=c(0,1))
 axis(2, at=c(0,1))
@@ -308,7 +329,9 @@ Higher values of $a$ spread the criteria further apart, whereas higher values of
 
 ## Implementing the model
 
-Figure \ref{fig:sdt} shows the situation where $d = `r ps[1]`$, $s = `r ps[2]`$, $a = `r ps[3]`$, and $b = `r ps[4]`$. However, these parameters likely vary across participants (differing both between young and older adults, but also within each age group) as well as with experimental manipulation. We could fit the model to each individual participant separately (e.g., via maximum likelihood), but our preferred approach is to model both group- and individual-level effects simultaneously in a Bayesian hierarchical model [see @GelmanAndHill2007 chapter 12 for why this is desirable]. In this tutorial we will outline how to implement the SDT model in the probabilistic programming language, Stan [https://mc-stan.org/; @carpenter2017stan], which performs the MCMC sampling often required in fitting models under a Bayesian framework. Documentation and tutorials on the Stan language can be found here: https://mc-stan.org/users/documentation/tutorials. Stan can be used in conjunction with other software, such as Python, Matlab, and Stata (https://mc-stan.org/users/interfaces/), but here we will be using `R` [@rteam] and the `rstan` package [@rstan] as our interface. Thus, while familiarity with `R` will be helpful, the tutorial on writing Stan models will hopefully be of use to users of other analysis software.[^R] Next we will go through a series of questions that we need to address to set up a working Stan implementation of the (hierarchical) SDT model.
+Figure \ref{fig:sdt} shows the situation where $d = `r ps[1]`$, $s = `r ps[2]`$, $a = `r ps[3]`$, and $b = `r ps[4]`$. However, these parameters likely vary across participants (differing both between young and older adults, but also within each age group) as well as with experimental manipulation. We could fit the model to each individual participant separately (e.g., via maximum likelihood), but, for the reasons outlined above, our preferred approach is to model both group- and individual-level effects simultaneously in a Bayesian hierarchical model. In this tutorial we will outline how to implement the SDT model in the probabilistic programming language, Stan [https://mc-stan.org/; @carpenter2017stan], which performs the MCMC sampling often required in fitting models under a Bayesian framework. Documentation and tutorials on the Stan language can be found here: https://mc-stan.org/users/documentation/tutorials. Stan can be used in conjunction with other software, such as Python, Matlab, and Stata (https://mc-stan.org/users/interfaces/), but here we will be using `R` [@rteam] and the `rstan` package [@rstan] as our interface (see the supplementary materials[^suppl] for more information on installing the relevant software). Thus, while familiarity with `R` will be helpful, the tutorial on writing Stan models will hopefully be of use to users of other analysis software.[^R] Next we will go through a series of questions that we need to address to set up a working Stan implementation of the (hierarchical) SDT model.
+
+[^suppl]: The supplement is available here: https://github.com/stephenrho/cognitive-aging-modeling/blob/master/paper/cognitive-modeling-supplement.pdf
 
 [^R]: We encourage readers to download the materials accompanying this article from https://github.com/stephenrho/cognitive-aging-modeling and use the `fit_SDT.R` script to follow the analyses described here. As the models can take a long time to fit, fitted models can also be downloaded by following instructions at the link above.
 
@@ -326,27 +349,42 @@ The format of these data is referred to as long (or tall), where a single observ
 
 With this data in mind we can start to write the Stan model, which can be found in the file `SDT_m1.stan` (available at https://github.com/stephenrho/cognitive-aging-modeling). Stan models are made up of 'blocks' (https://mc-stan.org/docs/2_24/reference-manual/overview-of-stans-program-blocks.html) and usually start by declaring the data. The Stan code below specifies the data necessary to fit the SDT model (the comments, following '//', describe each line).
 
-```{stan, output.var="l1", eval=F, echo=T}
+```
 data {
-  int<lower=0> N;               // n observations
-  int y[N];                     // ratings
-  int<lower=0> J;               // n participants
-  int<lower=1,upper=J> id[N];   // participant ids
-  matrix[N, 2] X;               // fixed design matrix
-  vector[N] sig_trial;          // indicator for signal (1) or noise (0) trial
-  int<lower=2> K;               // n categories
+int<lower=0> N;               // n observations
+int y[N];                     // ratings
+int<lower=0> J;               // n participants
+int<lower=1,upper=J> id[N];   // participant ids
+matrix[N, 2] X;               // fixed design matrix
+vector[N] sig_trial;          // indicator for signal (1) or noise (0) trial
+int<lower=2> K;               // n categories
 }
 ```
 
 In the `data` block one must specify the type (integer, real valued, matrix, vector) and, where appropriate, range for each item (e.g., are values below zero allowed?). Another important thing to note is that there are multiple other ways of structuring the data that could work. For example, here we have chosen to keep the rating response as a single long vector with an indicator vector that tells us whether an observation was a noise or signal trial. Instead we could have specified two vectors, one for noise trials and one for signal trials but the remaining stan code would have to be written differently to account for this. 
 
+```{r, results="asis"}
+
+syn_tab = read.csv("paper/syntax-table.csv")
+
+# column_spec(knitr::kable(syn_tab, format = "latex", booktabs=T), c(1,2), width = c("5cm", "10cm"))
+
+strCaption <- paste0("Selected parts of the Stan syntax used in the present example with a brief explanation")
+
+print(xtable(syn_tab, caption = strCaption, label = 'tab:syn', 
+             align = c("p{0.0\\textwidth}",
+                       "p{0.40\\textwidth}",
+                       "p{0.80\\textwidth}")), caption.placement = 'top', hline.after = NULL, include.colnames = F, include.rownames = F, sanitize.text.function = function(x) x, floating=TRUE, table.placement = 't', comment=F, scalebox = .7, add.to.row = list(pos = list(-1, nrow(syn_tab)),       command = c(paste0("\\toprule \n", "Syntax &  Explanation\\\\\n","\\midrule \n"), paste0("\\bottomrule \\\\\ "))))
+
+```
+
 Next, in fitting the @selker2019parsimonious version of the model, we use the number of categories, $K$, to create the unbiased criteria that the model will shift and scale. We use a `transformed data` block to do this:
 ```
 transformed data {
-  vector[K-1] unb_c;
-  for (k in 1:(K-1)){
-    unb_c[k] = -log( (1 - (exp(log(k) - log(K))))/(exp(log(k) - log(K))) );
-  }
+vector[K-1] unb_c;
+for (k in 1:(K-1)){
+unb_c[k] = -log( (1 - (exp(log(k) - log(K))))/(exp(log(k) - log(K))) );
+}
 }
 ```
 
@@ -372,24 +410,24 @@ where $x_j$ codes the age group of individual $j$, and $\beta_{1}^{(d)}$ is the 
 In Stan the parameters are specified in their own block, as follows:
 ```
 parameters {
-  // d
-  vector[2] B_d;
-  real b_d[J];
-  real<lower=0> tau_d;
-  
-  // c (shift [b] and scale [a])
-  vector[2] B_a;
-  real b_a[J];
-  real<lower=0> tau_a;
-  
-  vector[2] B_b;
-  real b_b[J];
-  real<lower=0> tau_b;
-  
-  // s
-  vector[2] B_s;
-  real b_s[J];
-  real<lower=0> tau_s;
+// d
+vector[2] B_d;
+real b_d[J];
+real<lower=0> tau_d;
+
+// c (shift [b] and scale [a])
+vector[2] B_a;
+real b_a[J];
+real<lower=0> tau_a;
+
+vector[2] B_b;
+real b_b[J];
+real<lower=0> tau_b;
+
+// s
+vector[2] B_s;
+real b_s[J];
+real<lower=0> tau_s;
 }
 ```
 where uppercase `B`s are the $\beta$s and lowercase `b`s are the $b$s and the letter after the underscore refers to the corresponding SDT parameter. The two $\beta$ parameters are specified as a vector.
@@ -403,24 +441,24 @@ The `transformed parameters` block starts by creating vectors to hold the SDT pa
 
 ```
 transformed parameters {
-  real<lower=0> d[N]; // note that d, a, and s are constrained positive
-  real<lower=0> a[N]; 
-  real b[N];
-  real<lower=0> s[N];
-  vector[K-1] c[N];
-  
-  simplex[K] theta[N];
-  
-  for (i in 1:N){
-    // observation level parameters
-    d[i] = exp( dot_product(X[i,], B_d) +  b_d[id[i]] );
-    a[i] = exp( dot_product(X[i,], B_a) + b_a[id[i]] );
-    b[i] = dot_product(X[i,], B_b) + b_b[id[i]];
-    s[i] = exp( dot_product(X[i,], B_s) + b_s[id[i]] );
-    
-    c[i] = a[i]*unb_c + b[i];
-    
-    ... // continued below
+real<lower=0> d[N]; // note that d, a, and s are constrained positive
+real<lower=0> a[N]; 
+real b[N];
+real<lower=0> s[N];
+vector[K-1] c[N];
+
+simplex[K] theta[N];
+
+for (i in 1:N){
+// observation level parameters
+d[i] = exp( dot_product(X[i,], B_d) +  b_d[id[i]] );
+a[i] = exp( dot_product(X[i,], B_a) + b_a[id[i]] );
+b[i] = dot_product(X[i,], B_b) + b_b[id[i]];
+s[i] = exp( dot_product(X[i,], B_s) + b_s[id[i]] );
+
+c[i] = a[i]*unb_c + b[i];
+
+... // continued below
 ```
 
 ### How do the parameters relate to predictions for each observation?
@@ -428,23 +466,23 @@ transformed parameters {
 As we have now specified the values of the SDT parameters for each observation, we are now ready to use them to produce predicted ratings, which is done in the second part of the `transformed parameters` block:
 
 ```
-    ... // continued from above
-    
-    // rating probabilities under SDT
-    if (sig_trial[i] == 1){ // signal trial
-      theta[i,1] = normal_cdf(c[i,1], d[i], s[i]);
-      for (k in 2:(K-1)){
-        theta[i,k] = normal_cdf(c[i,k], d[i], s[i]) - sum(theta[i,1:(k-1)]);
-      }
-    }
-    else { // noise trial
-      theta[i,1] = normal_cdf(c[i,1], 0, 1);
-      for (k in 2:(K-1)){
-        theta[i,k] = normal_cdf(c[i,k], 0, 1) - sum(theta[i,1:(k-1)]);
-      }
-    }
-    theta[i,K] = 1 - sum(theta[i,1:(K-1)]); // last rating probability 
-  }
+... // continued from above
+
+// rating probabilities under SDT
+if (sig_trial[i] == 1){ // signal trial
+theta[i,1] = normal_cdf(c[i,1], d[i], s[i]);
+for (k in 2:(K-1)){
+theta[i,k] = normal_cdf(c[i,k], d[i], s[i]) - sum(theta[i,1:(k-1)]);
+}
+}
+else { // noise trial
+theta[i,1] = normal_cdf(c[i,1], 0, 1);
+for (k in 2:(K-1)){
+theta[i,k] = normal_cdf(c[i,k], 0, 1) - sum(theta[i,1:(k-1)]);
+}
+}
+theta[i,K] = 1 - sum(theta[i,1:(K-1)]); // last rating probability 
+}
 }
 ```
 
@@ -458,31 +496,31 @@ The `model` block brings everything together and serves two main purposes: (1) t
 
 ```
 model {
-  // priors
-  B_d[1] ~ normal(0, 1);
-  B_d[2] ~ normal(0, 0.5);
-  B_a[1] ~ normal(0, 1);
-  B_a[2] ~ normal(0, 0.5);
-  B_b[1] ~ normal(0, 2);
-  B_b[2] ~ normal(0, 1);
-  B_s[1] ~ normal(0, 0.5);
-  B_s[2] ~ normal(0, 0.25);
-  
-  tau_d ~ cauchy(0, 1);
-  tau_a ~ cauchy(0, 1);
-  tau_b ~ cauchy(0, 2);
-  tau_s ~ cauchy(0, 0.5);
-  
-  // individual-level deviations
-  b_d ~ normal(0, tau_d);
-  b_a ~ normal(0, tau_a);
-  b_b ~ normal(0, tau_b);
-  b_s ~ normal(0, tau_s);
-  
-  // likelihood
-  for (i in 1:N){
-    y[i] ~ categorical(theta[i]);
-  }
+// priors
+B_d[1] ~ normal(0, 1);
+B_d[2] ~ normal(0, 0.5);
+B_a[1] ~ normal(0, 1);
+B_a[2] ~ normal(0, 0.5);
+B_b[1] ~ normal(0, 2);
+B_b[2] ~ normal(0, 1);
+B_s[1] ~ normal(0, 0.5);
+B_s[2] ~ normal(0, 0.25);
+
+tau_d ~ cauchy(0, 1);
+tau_a ~ cauchy(0, 1);
+tau_b ~ cauchy(0, 2);
+tau_s ~ cauchy(0, 0.5);
+
+// individual-level deviations
+b_d ~ normal(0, tau_d);
+b_a ~ normal(0, tau_a);
+b_b ~ normal(0, tau_b);
+b_s ~ normal(0, tau_s);
+
+// likelihood
+for (i in 1:N){
+y[i] ~ categorical(theta[i]);
+}
 }
 ```
 
@@ -593,8 +631,8 @@ The first model can be extended in multiple ways. For example, if we wanted to e
 The extension we want to cover here goes beyond asking whether there are age differences in certain parameters (we will focus again on $d$) to ask whether group differences are modulated by experimental manipulation (tests of group $\times$ condition interaction). In the example data set there is the additional factor of `cond` and each participant provides observations in both conditions (i.e., repeated measures). Therefore, we can model individual differences in the effect of condition. To extend the model (see `SDT_m3.stan`) we also must expand the `data` block of the model to change the design matrix, `X`, for the population-level effects and introduce a design matrix, `Z`, for individual-level effects:
 
 ```
-  matrix[N, 4] X;               // fixed design matrix
-  matrix[N, 2] Z;               // random design matrix
+matrix[N, 4] X;               // fixed design matrix
+matrix[N, 2] Z;               // random design matrix
 ```
 
 In `R` we also modify the data list so that `X` codes for main effects of group and condition plus their interaction and `Z` codes for the main effect of condition (including an individual-level effect of group here would not make sense as each individual can only belong to one group).
@@ -607,31 +645,31 @@ data_list$Z = model.matrix(~ 1 + cond, data = rdat)
 The `parameters` block must also be modified to reflect that there are now 4 group level effects and 2 individual effects, for which we are also modeling the correlation. Estimating the correlation allows us to assess whether participants with greater discriminability overall (captured by the intercept) exhibit a larger or smaller condition effect.
 
 ```
-  // d
-  vector[4] B_d; // 4 population effects (intercept, group, condition, interaction)
-  vector[2] b_d[J]; // 2 individual effects (intercept, condition)
-  corr_matrix[2] Sigma_d; // correlation of individual effects
-  vector<lower=0>[2] tau_d; // SD of individual effects
+// d
+vector[4] B_d; // 4 population effects (intercept, group, condition, interaction)
+vector[2] b_d[J]; // 2 individual effects (intercept, condition)
+corr_matrix[2] Sigma_d; // correlation of individual effects
+vector<lower=0>[2] tau_d; // SD of individual effects
 ```
 
 In the `transformed parameters` block the main modification is to the line determining $d$ to reflect the combination of the group- and individual-level parameters. In addition the lines for the other parameters are modified so that only the first two columns of the design matrix (`X[i,1:2]`) are used as we are only modeling the main effect of age group for these parameters:
 
 ```
-  d[i] = exp( dot_product(X[i,], B_d) + dot_product(Z[i,], b_d[id[i]]) );
-  a[i] = exp( dot_product(X[i,1:2], B_a) + b_a[id[i]] );
-  b[i] = dot_product(X[i,1:2], B_b) + b_b[id[i]];
-  s[i] = exp( dot_product(X[i,1:2], B_s) + b_s[id[i]] );
+d[i] = exp( dot_product(X[i,], B_d) + dot_product(Z[i,], b_d[id[i]]) );
+a[i] = exp( dot_product(X[i,1:2], B_a) + b_a[id[i]] );
+b[i] = dot_product(X[i,1:2], B_b) + b_b[id[i]];
+s[i] = exp( dot_product(X[i,1:2], B_s) + b_s[id[i]] );
 ```
 
 Finally, in the `model` block we must modify the way in which individual-level parameters for $d$ are determined. The first line specifies the prior distribution for the correlation matrix `Sigma_d` and the subsequent lines loop through the participants and sample their parameters from a multivariate normal distribution (the `quad_form_diag` function creates a covariance matrix). 
 
 ```
-  Sigma_d ~ lkj_corr(1.0);
+Sigma_d ~ lkj_corr(1.0);
 
-  // sample individual coefficients
-  for (j in 1:J){
-    b_d[j] ~ multi_normal([0,0], quad_form_diag(Sigma_d, tau_d));
-  }
+// sample individual coefficients
+for (j in 1:J){
+b_d[j] ~ multi_normal([0,0], quad_form_diag(Sigma_d, tau_d));
+}
 ```
 
 The line `Sigma_d ~ lkj_corr(1.0);` specifies an 'LKJ' prior [@lewandowski2009generating] on the correlation matrix for the individual-level $d$ effects (i.e., the participant intercept and effect of condition). The setting of 1 means that all correlations (-1 to 1) are equally likely before seeing the data. More information on specifying multivariate priors can be found at https://mc-stan.org/docs/2_24/stan-users-guide/multivariate-hierarchical-priors-section.html. <!--No modifications are required to the `generated quantities` block.-->
@@ -665,7 +703,7 @@ Widespread use of cognitive modeling in cognitive aging research can be useful f
 
 This tutorial is likely to serve as one important learning tool for cognitive aging researchers as they begin to embark on their own cognitive modeling journeys. However, there are certainly other resources to consult, and learning cognitive modeling requires time, patience, and dedication. For a lengthier read about cognitive modeling in general (though not with specific applications in aging, per se), we recommend the great book by @FarrellAndLewandowsky2018, which also includes references to R code and Bayesian modeling. There are many great books for learning Bayesian statistics more generally, including @Kruschke2015 and @McElreath2016 (and see the article by @EtzEtAl2018 for an annoted reading list). Finally, many great articles on the topic of cognitive modeling were published in the December 2019 issue of *Computational Brain \& Behavior*, which featured a lengthy discussion among several top cognitive modelers on the topic of robust modeling in cognitive science [@LeeEtAl2019] and other best practices in cognitive modeling, including whether cognitive models should be pre-registered [@MacEachernAndVanZandt2019]. 
 
-Cognitive modeling is an ever-evolving field. Therefore, it is important that cognitive modelers keep as up-to-date as possible with new advances and recommended practices. In this tutorial, we focused on hierarchical Bayesian estimation of cognitive models, as estimation under a hierarchical Bayesian framework is suitable for addressing both and individual- and group-level effects simultaneously and is a powerful technique for non-linear modeling, which is often not possible with frequentist methods. Bayesian analyses are more robust than frequentist equivalents, as they can regularize inference in low-power situations [@MoreyEtAl2016] and are suitable for quantifiying uncertainty about cognitive parameters, and models in general [@WagenmakersEtAl2016]. When adopting a Bayesian analytical approach for cognitive modeling, researchers should consider the following practices regarding choice of prior specification of model parameters; diagnostic checks of model adequacy, convergence, and fit; and posterior predictive checks of the model, using simulations from the model's posterior distribution (for a more detailed discussion, including a recommended work-flow, see @SchadEtAlpreprint). In addition, it is often necessary to compare multiple models, and such comparisons can be made in a Bayesian framework with a Bayes factor approach, though researchers should be mindful of the sensitivity of Bayes factors to priors. We discuss each of these points in more depth below.
+Cognitive modeling is an ever-evolving field. Therefore, it is important that cognitive modelers keep as up-to-date as possible with new advances and recommended practices. In this tutorial, we focused on hierarchical Bayesian estimation of cognitive models, as estimation under a hierarchical Bayesian framework is suitable for addressing both and individual- and group-level effects simultaneously and is a powerful technique for non-linear modeling, which is often not possible with frequentist methods. Bayesian analyses are more robust than frequentist equivalents, as they can regularize inference in low-power situations [@MoreyEtAl2016] and are suitable for quantifiying uncertainty about cognitive parameters, and models in general [@WagenmakersEtAl2016]. When adopting a Bayesian analytical approach for cognitive modeling, researchers should consider the following practices regarding choice of prior specification of model parameters; diagnostic checks of model adequacy, convergence, and fit; and posterior predictive checks of the model, using simulations from the model's posterior distribution (for a more detailed discussion, including a recommended work-flow, see @schad2021toward). In addition, it is often necessary to compare multiple models, and such comparisons can be made in a Bayesian framework with a Bayes factor approach, though researchers should be mindful of the sensitivity of Bayes factors to priors. We discuss each of these points in more depth below.
 
 ### Choice of Priors
 
@@ -675,7 +713,7 @@ We recommend that researchers select priors that are sensible for their experime
 
 Researchers should evaluate how influential their priors were by conducting prior sensitivty analyses, in which they compare the posterior distribution of the model parameters, based on the same data set, with different prior specifications. These may include a weakly informative prior and a highly informative prior. Subtle changes in the posterior distribution are likely to occur, but if substantial changes occur, this may call into question how reliable the data were, or whether the chosen prior was appropriate. 
 
-Sometimes a prior may be grossly inadequate for a particular research question. Researchers may consider conducting a prior predictive check to test whether their chosen priors make reasonable predictions about the possible values a parameter may take or whether these priors result in overestimation extreme values (for a detailed discussion on prior predictive checks, including a worked example, see @SchadEtAlpreprint).
+Sometimes a prior may be grossly inadequate for a particular research question. Researchers may consider conducting a prior predictive check to test whether their chosen priors make reasonable predictions about the possible values a parameter may take or whether these priors result in overestimation extreme values (for a detailed discussion on prior predictive checks, including a worked example, see @schad2021toward).
 
 ### Diagnosing Model Convergence
 
