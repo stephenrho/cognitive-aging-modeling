@@ -8,7 +8,7 @@ data {
   int y[N];                     // ratings
   int<lower=0> J;               // n participants
   int<lower=1,upper=J> id[N];   // participant ids
-  matrix[N, 2] X;               // fixed design matrix
+  matrix[N, 2] X;               // design matrix for fixed (group-level) effects
   vector[N] sig_trial;          // indicator for signal (1) or noise (0) trial
   int<lower=2> K;               // n categories
   int group[J];                 // indicator of group membership (0 or 1)

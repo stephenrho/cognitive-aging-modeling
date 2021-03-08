@@ -8,8 +8,8 @@ data {
   int y[N];                     // ratings
   int<lower=0> J;               // n subjects
   int<lower=1,upper=J> id[N];   // subject ids
-  matrix[N, 4] X;               // fixed design matrix
-  matrix[N, 2] Z;               // random design matrix
+  matrix[N, 4] X;               // design matrix for fixed (group-level) effects
+  matrix[N, 2] Z;               // design matrix for random (individual-level) effects
   vector[N] sig_trial;          // indicator for signal (1) or noise (0) trial
   int<lower=2> K;               // n categories
 }
