@@ -13,9 +13,9 @@ author:
 
 affiliation:
   - id            : "1"
-    institution   : "University of Missouri"
+    institution   : "Department of Psychological Sciences, University of Missouri"
   - id            : "2"
-    institution   : "Rotman Research Institute"
+    institution   : "Rotman Research Institute, Baycrest Health Sciences, Toronto ON, Canada"
 
 note: |
   Draft: `r format(Sys.time(), '%d %B %Y')`
@@ -414,7 +414,7 @@ Higher values of $a$ spread the criteria further apart, whereas higher values of
 
 ## Implementing the model
 
-Figure \ref{fig:sdt} shows the situation where $d = `r ps[1]`$, $s = `r ps[2]`$, $a = `r ps[3]`$, and $b = `r ps[4]`$. However, these parameters likely vary across participants (differing both between young and older adults, but also within each age group) as well as with experimental manipulation. We could fit the model to each individual participant separately (e.g., via maximum likelihood), but, for the reasons outlined above, our preferred approach is to model both group- and individual-level effects simultaneously in a Bayesian hierarchical model. In this tutorial we outline how to implement the SDT model in the probabilistic programming language, Stan [https://mc-stan.org/; @carpenter2017stan], which performs the MCMC sampling often required in fitting models under a Bayesian framework. Documentation and tutorials on the Stan language can be found here: https://mc-stan.org/users/documentation/tutorials. Stan can be used in conjunction with other software, such as Python, Matlab, and Stata (https://mc-stan.org/users/interfaces/), but here we will be using `R` [@rteam] and the `rstan` package [@rstan] as our interface (see the supplementary materials[^suppl] for more information on installing the relevant software). Thus, while familiarity with `R` will be helpful, the tutorial on writing Stan models will hopefully be of use to users of other analysis software.[^R] Next we will go through a series of questions that we need to address to set up a working Stan implementation of the (hierarchical) SDT model.
+Figure \ref{fig:sdt} shows the situation where $d = `r ps[1]`$, $s = `r ps[2]`$, $a = `r ps[3]`$, and $b = `r ps[4]`$. However, these parameters likely vary across participants (differing both between young and older adults, but also within each age group) as well as with experimental manipulation. We could fit the model to each individual participant separately (e.g., via maximum likelihood), but, for the reasons outlined above, our preferred approach is to model both group- and individual-level effects simultaneously in a Bayesian hierarchical model. In this tutorial we outline how to implement the SDT model in the probabilistic programming language, Stan [https://mc-stan.org/; @carpenter2017stan], which performs the MCMC sampling often required in fitting models under a Bayesian framework. Documentation and tutorials on the Stan language can be found here: https://mc-stan.org/users/documentation/tutorials. Stan can be used in conjunction with other software, such as Python, Matlab, and Stata (https://mc-stan.org/users/interfaces/), but here we will be using `R` [@rteam] and the `rstan` package [@rstan] as our interface (see the supplement[^suppl] for more information on installing the relevant software). Thus, while familiarity with `R` will be helpful, the tutorial on writing Stan models will hopefully be of use to users of other analysis software.[^R] Next we will go through a series of questions that we need to address to set up a working Stan implementation of the (hierarchical) SDT model.
 
 [^suppl]: The supplement is available here: https://github.com/stephenrho/cognitive-aging-modeling/blob/master/paper/cognitive-modeling-supplement.pdf
 
@@ -656,7 +656,7 @@ Once the sampling is complete the `SDT_m1_fit` object contains posterior samples
 
 ### Does the model do a good job?
 
-It is important to assess whether the fitted model provides an accurate representation of the observed data. One way of doing this is by plotting data simulated from the fitted model (posterior predictions) against the observed data. This requires that we add an extra block, `generated quantities`, to our Stan model, and this is covered in the supplementary material.
+It is important to assess whether the fitted model provides an accurate representation of the observed data. One way of doing this is by plotting data simulated from the fitted model (posterior predictions) against the observed data. This requires that we add an extra block, `generated quantities`, to our Stan model, and this is covered in the supplement.
 
 ### Assessing age differences in model parameters
 
@@ -708,7 +708,7 @@ The 95% HDI for the difference in $d$ between the younger and older groups is [`
 
 ## Extending the model
 
-The first model can be extended in multiple ways. For example, if we wanted to evaluate the weight of evidence in favor an age difference in $d$ we could construct a second model in which this parameter is fixed across groups (this model is written in the `SDT_m2.stan` file) to compare to the first model. The supplemental material covers model comparison using the `bridgesampling` package [@bridgesampling] to calculate Bayes' factors. The supplement also covers the inclusion of item/stimulus effects, which are often an important source of variability in performance and are important to take into account for accurate estimation (see "Why Use Hierarchical Bayesian Estimation?"), and how to model differences in between-participant variability between different age groups [@shammi1998aging]. The supplement also describes how to utilize the information on individual differences in latent cognitive parameters and how to extend the model to correlate this with other measures of interest (e.g., neuropsychological scores, personality assessments, biological variables).
+The first model can be extended in multiple ways. For example, if we wanted to evaluate the weight of evidence in favor an age difference in $d$ we could construct a second model in which this parameter is fixed across groups (this model is written in the `SDT_m2.stan` file) to compare to the first model. The supplement covers model comparison using the `bridgesampling` package [@bridgesampling] to calculate Bayes' factors. The supplement also covers the inclusion of item/stimulus effects, which are often an important source of variability in performance and are important to take into account for accurate estimation (see "Why Use Hierarchical Bayesian Estimation?"), and how to model differences in between-participant variability between different age groups [@shammi1998aging]. The supplement also describes how to utilize the information on individual differences in latent cognitive parameters and how to extend the model to correlate this with other measures of interest (e.g., neuropsychological scores, personality assessments, biological variables).
 
 The extension we want to cover here goes beyond asking whether there are age differences in certain parameters (we will focus again on $d$) to ask whether group differences are modulated by experimental manipulation (tests of group $\times$ condition interaction). In the example data set there is the additional factor of `cond` and each participant provides observations in both conditions (i.e., repeated measures). Therefore, we can model individual differences in the effect of condition. To extend the model (see `SDT_m3.stan`) we also must expand the `data` block of the model to change the design matrix, `X`, for the population-level effects and introduce a design matrix, `Z`, for individual-level effects:
 
@@ -769,7 +769,7 @@ SDT_m3_fit <- stan(
 )
 ```
 
-The supplementary material shows how to use this fitted model to calculate differences between groups and conditions.
+The supplement shows how to use this fitted model to calculate differences between groups and conditions.
 
 # Discussion
 
@@ -848,6 +848,8 @@ Cognitive modeling is an ever-evolving field. Therefore, it is important that co
 ## Conclusions
 
 To conclude, aging researchers seeking to understand age differences in cognitive processes should consider incorporating cognitive modeling, either in lieu of standard statistical analyses applied to the raw data, or to supplement those analyses with models that parameterize the latent cognitive processes of theoretical or empirical interest.
+
+\newpage
 
 # References
 
