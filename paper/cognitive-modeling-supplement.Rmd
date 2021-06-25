@@ -77,7 +77,7 @@ install.packages(pkgs = c("rstan",
                  )
 ```
 
-We also recommend visiting https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started for more information on installing `rstan`.
+We also recommend visiting https://github.com/stan-dev/rstan/wiki/RStan-Getting-Started for more information on installing `rstan`. Mac users may need to install command line tools (Xcode) to get things working.
 
 Once the relevant packages are installed you will need to set the 'working directory' to let `R` know where to find the models and data prior to running `fit_SDT.R`. This will depend on where you downloaded the github repository to. In `R studio` you can click "Session" --> "Set Working Directory" --> "Choose Directory..." to select the folder/directory containing the code. Alternatively, (also assuming you are using `R studio`) you can add the following code at the beginning of `fit_SDT.R`:
 
